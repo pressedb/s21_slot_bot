@@ -126,7 +126,7 @@ class StatusFlow(Flow):
             f"всего: {inst.stats.attempts_total} ({inst.stats.attempts_success} успешных, {inst.stats.attempts_failed} с ошибкой)",
         ]
         if c.interval_sec != self._bot_manager.poll_interval_sec:
-            bot_lines.append(f"интервал: {c.interval_sec}")
+            bot_lines.append(f"интервал: {c.interval_sec} секунд")
         self._add_indent(bot_lines, STATUS_LINE_INDENT * 3, first_indent_delta=len(state_emoji) * 3)
         return bot_lines
 
