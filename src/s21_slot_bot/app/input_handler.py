@@ -108,7 +108,7 @@ class InputHandler:
                 await self._messenger.render_menu_error(context, error_description, logger)
             case Error():
                 await self._messenger.send(context, error_description)
-            case httpx.TransportError():
+            case httpx.TransportError(), telegram.error.NetworkError():
                 logger.exception("Error with connection, likely while trying to fetch updates, suppressing the error")
             case _:
                 await self._messenger.send(context, f"❌ неизвестная ошибка - {error_description}")
