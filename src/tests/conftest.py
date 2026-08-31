@@ -37,7 +37,17 @@ from s21_slot_bot.app.models import (
 )
 from s21_slot_bot.client.middleware.auth import School21AuthMiddleware
 from s21_slot_bot.client.middleware.retry import School21RetryMiddleware
-from s21_slot_bot.client.models import Booking, Project, ProjectExtended, ProjectStatus, ReviewInfo, SlotsInfo, TimeSlot
+from s21_slot_bot.client.models import (
+    DryRevieweeBooking,
+    Project,
+    ProjectExtended,
+    ProjectStatus,
+    RevieweeBooking,
+    ReviewInfo,
+    SlotsInfo,
+    TimeSlot,
+    VerifierBooking,
+)
 from s21_slot_bot.client.s21_client import School21Client
 from s21_slot_bot.common.logger import LoggerLike
 from s21_slot_bot.config import SlotBotServiceConfig
@@ -520,21 +530,72 @@ def project_extended_factory() -> Callable[..., ProjectExtended]:
 
 
 @pytest.fixture
-def booking_factory(now: datetime) -> Callable[..., Booking]:
+def reviewee_booking_factory(now: datetime) -> Callable[..., RevieweeBooking]:
+    def factory(
+        *,
+        booking_id: str = "booking-1",
+        project_id: str = "project-1",
+        project_name: str = "Project 1",
+        student_login: str | None = "student",
+        start: datetime | None = None,
+        end: datetime | None = None,
+        url: str | None = None,
+    ) -> RevieweeBooking:
+        return RevieweeBooking(
+            id=booking_id,
+            answer_id="answer-1",
+            project_id=project_id,
+            project_name=project_name,
+            student_login=student_login,
+            start=start or now + timedelta(minutes=30),
+            end=end or now + timedelta(hours=1),
+            url=url,
+        )
+
+    return factory
+
+
+@pytest.fixture
+def dry_reviewee_booking_factory(now: datetime) -> Callable[..., DryRevieweeBooking]:
     def factory(
         *,
         booking_id: str = "booking-1",
         project_id: str = "project-1",
         project_name: str = "Project 1",
         start: datetime | None = None,
-        url: str | None = None,
-    ) -> Booking:
-        return Booking(
+        end: datetime | None = None,
+    ) -> DryRevieweeBooking:
+        return DryRevieweeBooking(
             id=booking_id,
             answer_id="answer-1",
             project_id=project_id,
             project_name=project_name,
             start=start or now + timedelta(minutes=30),
+            end=end or now + timedelta(hours=1),
+        )
+
+    return factory
+
+
+@pytest.fixture
+def verifier_booking_factory(now: datetime) -> Callable[..., VerifierBooking]:
+    def factory(
+        booking_id: str = "verifier-booking",
+        start: datetime | None = None,
+        end: datetime | None = None,
+        project_id: str | None = "project-id",
+        project_name: str | None = "Project",
+        student_login: str | None = "student",
+        url: str | None = None,
+    ) -> VerifierBooking:
+        actual_start = start or now + timedelta(hours=1)
+        return VerifierBooking(
+            id=booking_id,
+            start=actual_start,
+            end=end or actual_start + timedelta(minutes=45),
+            project_id=project_id,
+            project_name=project_name,
+            student_login=student_login,
             url=url,
         )
 

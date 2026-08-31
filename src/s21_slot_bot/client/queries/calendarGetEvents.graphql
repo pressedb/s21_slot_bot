@@ -1,0 +1,215 @@
+query calendarGetEvents($from: DateTime!, $to: DateTime!) {
+    calendarEventS21 {
+        getMyCalendarEvents(from: $from, to: $to) {
+            ...CalendarEvent
+            __typename
+        }
+        __typename
+    }
+}
+
+fragment CalendarEvent on CalendarEvent {
+    id
+    start
+    end
+    description
+    eventType
+    eventCode
+    eventSlots {
+        id
+        type
+        start
+        end
+        event {
+            eventUserRole
+            __typename
+        }
+        school {
+            shortName
+            __typename
+        }
+        __typename
+    }
+    bookings {
+        ...CalendarReviewBooking
+        __typename
+    }
+    exam {
+        ...CalendarEventExam
+        __typename
+    }
+    studentCodeReview {
+        studentGoalId
+        __typename
+    }
+    activity {
+        ...CalendarEventActivity
+        studentFeedback {
+            id
+            rating
+            comment
+            isEmpty
+            __typename
+        }
+        status
+        activityType
+        isMandatory
+        isWaitListActive
+        isVisible
+        comments {
+            type
+            createTs
+            comment
+            __typename
+        }
+        organizers {
+            id
+            login
+            __typename
+        }
+        __typename
+    }
+    goals {
+        goalId
+        goalName
+        __typename
+    }
+    penalty {
+        ...Penalty
+        __typename
+    }
+    __typename
+}
+
+fragment CalendarReviewBooking on CalendarBooking {
+    id
+    answerId
+    eventSlotId
+    task {
+        id
+        goalId
+        goalName
+        studentTaskAdditionalAttributes {
+            cookiesCount
+            __typename
+        }
+        assignmentType
+        __typename
+    }
+    eventSlot {
+        id
+        start
+        end
+        event {
+            eventUserRole
+            eventCode
+            __typename
+        }
+        school {
+            shortName
+            __typename
+        }
+        __typename
+    }
+    verifierUser {
+        ...CalendarReviewUser
+        __typename
+    }
+    verifiableInfo {
+        verifiableStudents {
+            ...VerifiableStudentItem
+            __typename
+        }
+        team {
+            name
+            __typename
+        }
+        __typename
+    }
+    bookingStatus
+    isOnline
+    vcLinkUrl
+    additionalChecklist {
+        filledChecklistId
+        filledChecklistStatusRecordingEnum
+        __typename
+    }
+    __typename
+}
+
+fragment CalendarReviewUser on User {
+    id
+    login
+    __typename
+}
+
+fragment VerifiableStudentItem on VerifiableStudent {
+    userId
+    login
+    avatarUrl
+    levelCode
+    isTeamLead
+    cookiesCount
+    codeReviewPoints
+    school {
+        shortName
+        __typename
+    }
+    __typename
+}
+
+fragment CalendarEventExam on Exam {
+    examId
+    eventId
+    beginDate
+    endDate
+    name
+    location
+    currentStudentsCount
+    maxStudentCount
+    updateDate
+    goalId
+    goalName
+    isWaitListActive
+    isInWaitList
+    stopRegisterDate
+    __typename
+}
+
+fragment CalendarEventActivity on ActivityEvent {
+    activityEventId
+    eventId
+    name
+    beginDate
+    endDate
+    isRegistered
+    description
+    currentStudentsCount
+    maxStudentCount
+    location
+    updateDate
+    isWaitListActive
+    isInWaitList
+    stopRegisterDate
+    __typename
+}
+
+fragment Penalty on Penalty {
+    comment
+    id
+    duration
+    status
+    startTime
+    createTime
+    penaltySlot {
+        currentStudentsCount
+        description
+        duration
+        startTime
+        id
+        endTime
+        __typename
+    }
+    reasonId
+    __typename
+}

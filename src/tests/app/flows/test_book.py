@@ -13,7 +13,7 @@ from s21_slot_bot.app.flows.book import BookFlow
 from s21_slot_bot.app.messenger import Messenger
 from s21_slot_bot.app.models import BotInstance, CustomContext
 from s21_slot_bot.client.errors import School21Error
-from s21_slot_bot.client.models import DryBooking
+from s21_slot_bot.client.models import DryRevieweeBooking
 
 
 class TestBookFlow:
@@ -24,18 +24,15 @@ class TestBookFlow:
         booking_manager: BookingManager,
         messenger: Messenger,
         bot_instance_factory: Callable[..., BotInstance],
+        dry_reviewee_booking_factory: Callable[..., DryRevieweeBooking],
         query_mock: CallbackQuery,
         context: CustomContext,
-        now: datetime,
     ) -> None:
         inst = bot_instance_factory()
         bot_manager.get_bot = MagicMock(return_value=inst)
-        booking_manager._dry_bookings["dry-1"] = DryBooking(
-            dry_run_id="dry-1",
-            answer_id="answer-1",
+        booking_manager._dry_reviewee_bookings["dry-1"] = dry_reviewee_booking_factory(
+            booking_id="dry-1",
             project_id=inst.cfg.project_id,
-            project_name=inst.cfg.project_name,
-            start=now,
         )
         booking_manager.book = AsyncMock(return_value=True)
         messenger.safe_delete = AsyncMock()
@@ -54,6 +51,7 @@ class TestBookFlow:
         booking_manager: BookingManager,
         messenger: Messenger,
         bot_instance_factory: Callable[..., BotInstance],
+        dry_reviewee_booking_factory: Callable[..., DryRevieweeBooking],
         query_mock: CallbackQuery,
         context: CustomContext,
         now: datetime,
@@ -61,12 +59,9 @@ class TestBookFlow:
         inst = bot_instance_factory()
         bot_manager.get_bot = MagicMock(return_value=inst)
         bot_manager.stop_bot = MagicMock()
-        booking_manager._dry_bookings["dry-1"] = DryBooking(
-            dry_run_id="dry-1",
-            answer_id="answer-1",
+        booking_manager._dry_reviewee_bookings["dry-1"] = dry_reviewee_booking_factory(
+            booking_id="dry-1",
             project_id=inst.cfg.project_id,
-            project_name=inst.cfg.project_name,
-            start=now,
         )
         booking_manager.book = AsyncMock(return_value=False)
         messenger.safe_delete = AsyncMock()
@@ -98,18 +93,16 @@ class TestBookFlow:
         bot_manager: BotManager,
         booking_manager: BookingManager,
         bot_instance_factory: Callable[..., BotInstance],
+        dry_reviewee_booking_factory: Callable[..., DryRevieweeBooking],
         query_mock: CallbackQuery,
         context: CustomContext,
         now: datetime,
     ) -> None:
         inst = bot_instance_factory()
         bot_manager.get_bot = MagicMock(return_value=inst)
-        booking_manager._dry_bookings["dry-1"] = DryBooking(
-            dry_run_id="dry-1",
-            answer_id="answer-1",
+        booking_manager._dry_reviewee_bookings["dry-1"] = dry_reviewee_booking_factory(
+            booking_id="dry-1",
             project_id=inst.cfg.project_id,
-            project_name=inst.cfg.project_name,
-            start=now,
         )
         booking_manager.book = AsyncMock(side_effect=School21Error("boom"))
         with pytest.raises(BotRuntimeError):

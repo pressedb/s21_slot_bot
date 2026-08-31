@@ -31,13 +31,14 @@ from s21_slot_bot.client.middleware.auth import School21AuthMiddleware
 from s21_slot_bot.client.middleware.base import School21Middleware
 from s21_slot_bot.client.middleware.retry import School21RetryMiddleware
 from s21_slot_bot.client.models import (
-    Booking,
     ContentType,
     OperationName,
     Project,
     ProjectStatus,
+    RevieweeBooking,
     ReviewInfo,
     SlotsInfo,
+    VerifierBooking,
 )
 from s21_slot_bot.common.logger import LoggerLike
 from s21_slot_bot.common.time import dt_to_isoz
@@ -188,14 +189,48 @@ class School21Client:
         except Exception as e:
             self._raise_parsing_error(operation_name, e, data)
 
-    async def get_bookings(self, from_dt: datetime, to_dt: datetime, logger: LoggerLike) -> dict[str, Booking]:
+    async def get_reviewee_bookings(
+        self, from_dt: datetime, to_dt: datetime, logger: LoggerLike
+    ) -> dict[str, RevieweeBooking]:
         from_iso_z, to_iso_z = dt_to_isoz(from_dt), dt_to_isoz(to_dt)
-        operation_name = OperationName.GET_BOOKINGS
+        operation_name = OperationName.GET_REVIEWEE_BOOKINGS
         data = await self._graphql(operation_name, {"from": from_iso_z, "to": to_iso_z}, logger)
         try:
             raw_bookings: list[dict[str, Any]] = data["student"]["getMyCalendarBookings"]
-            bookings = {raw["id"]: Booking.model_validate(raw) for raw in raw_bookings}
+            bookings = {raw["id"]: RevieweeBooking.model_validate(raw) for raw in raw_bookings}
             logger.info("Received %d bookings: %s", len(bookings), bookings)
+            return bookings
+        except Exception as e:
+            self._raise_parsing_error(operation_name, e, data)
+
+    async def get_verifier_bookings(
+        self,
+        from_dt: datetime,
+        to_dt: datetime,
+        logger: LoggerLike,
+    ) -> dict[str, VerifierBooking]:
+        from_iso_z, to_iso_z = dt_to_isoz(from_dt), dt_to_isoz(to_dt)
+        operation_name = OperationName.GET_VERIFIER_BOOKINGS
+        data = await self._graphql(operation_name, {"from": from_iso_z, "to": to_iso_z}, logger)
+        try:
+            bookings: dict[str, VerifierBooking] = {}
+            raw_events: list[dict[str, Any]] = data["calendarEventS21"]["getMyCalendarEvents"]
+            for event in raw_events:
+                if event.get("eventCode") == "student_check":
+                    for raw_booking in event.get("bookings", []):
+                        bookings[raw_booking["id"]] = VerifierBooking.model_validate(raw_booking)
+            logger.info(
+                "Received %d verifier bookings: %s",
+                len(bookings),
+                {
+                    booking.id: {
+                        "project": booking.project_name,
+                        "student": booking.student_login,
+                        "start": booking.start,
+                    }
+                    for booking in bookings.values()
+                },
+            )
             return bookings
         except Exception as e:
             self._raise_parsing_error(operation_name, e, data)
@@ -205,7 +240,6 @@ class School21Client:
         answer_id: str,
         start_time: datetime,
         logger: LoggerLike,
-        is_staff_slot: bool = False,
         is_online: bool = True,
     ) -> str:
         start_time_iso_z = dt_to_isoz(start_time)
@@ -215,7 +249,7 @@ class School21Client:
             {
                 "answerId": answer_id,
                 "startTime": start_time_iso_z,
-                "wasStaffSlotChosen": is_staff_slot,
+                "wasStaffSlotChosen": False,
                 "isOnline": is_online,
             },
             logger,
@@ -296,11 +330,7 @@ class School21Client:
                     raise School21NoPointsError("недостаточно PRP для записи на проверку", location=location)
                 case School21ErrorType.SLOT_NOT_FOUND:
                     raise School21SlotNotFoundError("слот не найден", location=location)
-
-        raise School21Error(
-            "ошибка запроса к Школе 21",
-            location=location,
-        )
+        raise School21Error("ошибка запроса к Школе 21", location=location)
 
     def _raise_parsing_error(self, operation_name: str, error: Exception, data: dict[str, Any]) -> NoReturn:
         raise School21ParsingError(

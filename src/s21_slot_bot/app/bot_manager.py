@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from s21_slot_bot.app.booking_manager import BookingManager
 from s21_slot_bot.app.config import BotConfig
@@ -168,30 +168,29 @@ class BotManager:
                 )
                 return
 
-            picked = self._pick_candidate_start(slots_info.time_slots)
-            if not picked:
+            picked_start_time = self._pick_candidate_start(slots_info.time_slots)
+            if not picked_start_time:
                 logger.info("No suitable timeslots found")
                 return
-
-            start_time, is_staff_slot = picked
+            end_time = picked_start_time + timedelta(minutes=slots_info.check_duration)
             match cfg.mode:
                 case Mode.ONLY_FIND:
                     await self._booking_manager.book_dry(
                         inst=inst,
                         answer_id=answer_id,
-                        start_time=start_time,
+                        start_time=picked_start_time,
+                        end_time=end_time,
                         context=context,
-                        is_staff_slot=is_staff_slot,
                     )
                     self.stop_bot(cfg.bot_id, context, logger)
                 case Mode.FIND_AND_BOOK:
                     are_review_points_left = await self._booking_manager.book(
                         inst=inst,
                         answer_id=answer_id,
-                        start_time=start_time,
+                        start_time=picked_start_time,
+                        end_time=end_time,
                         logger=logger,
                         context=context,
-                        is_staff_slot=is_staff_slot,
                     )
                     if not are_review_points_left:
                         self.stop_bot(cfg.bot_id, context, logger)
@@ -204,12 +203,9 @@ class BotManager:
             )
             raise BotRuntimeError(f"бот #{cfg.bot_id} ({cfg.project_name}): ошибка поиска") from e
 
-    def _pick_candidate_start(self, timeslots: list[TimeSlot]) -> tuple[datetime, bool] | None:
-        candidates: list[tuple[datetime, bool]] = []
-        for slot in timeslots:
-            for time in slot.valid_start_times:
-                candidates.append((time, slot.staff_slot))
-        if not candidates:
-            return None
-        candidates.sort(key=lambda candidate: candidate[0])
-        return candidates[0]
+    def _pick_candidate_start(self, timeslots: list[TimeSlot]) -> datetime | None:
+        candidates: set[datetime] = {
+            time for slot in timeslots for time in slot.valid_start_times if not slot.staff_slot
+        }
+        candidate = min(candidates) if candidates else None
+        return candidate

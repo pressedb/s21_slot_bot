@@ -16,9 +16,9 @@ from pydantic.alias_generators import to_camel
 from s21_slot_bot.client.consts import MAX_REQUIRED_REVIEWS
 
 type CoercedStr = Annotated[str, BeforeValidator(lambda val: str(val) if isinstance(val, int) else val)]
-
 type RequiredReviews = Annotated[PositiveInt, Field(le=MAX_REQUIRED_REVIEWS)]
 type BookedReviews = Annotated[NonNegativeInt, Field(le=MAX_REQUIRED_REVIEWS)]
+type ActualBooking = RevieweeBooking | VerifierBooking
 
 
 class ContentType(StrEnum):
@@ -40,7 +40,8 @@ class Tokens(BaseModel):
 class OperationName(StrEnum):
     BOOK = "calendarAddBookingToEventSlot"
     GET_USER = "getCurrentUser"
-    GET_BOOKINGS = "calendarGetMyBookings"
+    GET_REVIEWEE_BOOKINGS = "calendarGetMyBookings"
+    GET_VERIFIER_BOOKINGS = "calendarGetEvents"
     GET_CUR_PROJECTS = "getStudentCurrentProjects"
     GET_LOCAL_COURSE_GOALS = "getLocalCourseGoals"
     GET_MODULE = "calendarGetModule"
@@ -97,24 +98,61 @@ class ReviewInfo(S21Model):
     )
 
 
+class BookingDirection(StrEnum):
+    REVIEWEE = "reviewee"
+    VERIFIER = "verifier"
+
+
+class NotificationKey(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    id: str = Field(description="Booking ID, taken from S21 or generated for dry-runs")
+    direction: BookingDirection
+
+
 class BookingBase(S21Model):
-    answer_id: str = Field(description="ID required to book a slot for a given project")
-    project_id: str = Field(description="Project ID", validation_alias=AliasPath("task", "goalId"))
-    project_name: str = Field(description="Project name", validation_alias=AliasPath("task", "goalName"))
+    id: str = Field(description="Booking ID, taken from S21 or generated for dry-runs")
     start: AwareDatetime = Field(
         description="Start time of the booked slot", validation_alias=AliasPath("eventSlot", "start")
     )
+    end: AwareDatetime = Field(
+        description="End time of the booked slot", validation_alias=AliasPath("eventSlot", "end")
+    )
 
 
-class Booking(BookingBase):
-    id: str = Field(description="Booking ID")
+class RevieweeBooking(BookingBase):
+    answer_id: str = Field(description="ID required to book a slot for a given project")
+    project_id: str = Field(description="Project ID", validation_alias=AliasPath("task", "goalId"))
+    project_name: str = Field(description="Project name", validation_alias=AliasPath("task", "goalName"))
     is_online: bool = Field(default=True, description="Whether the review takes place online or not")
+    student_login: str | None = Field(
+        default=None, description="Verifier student login", validation_alias=AliasPath("verifierUser", "login")
+    )
     url: str | None = Field(default=None, description="URL of the online review call", alias="vcLinkUrl")
 
 
-class DryBooking(BookingBase):
-    dry_run_id: str = Field(description="Booking ID generated during a dry-run")
-    is_staff_slot: bool = Field(default=False, description="Whether the found slot was opened by staff or by a student")
+class DryRevieweeBooking(BookingBase):
+    answer_id: str = Field(description="ID required to book a slot for a given project")
+    project_id: str = Field(description="Project ID", validation_alias=AliasPath("task", "goalId"))
+    project_name: str = Field(description="Project name", validation_alias=AliasPath("task", "goalName"))
+
+
+class VerifierBooking(BookingBase):
+    project_id: str | None = Field(default=None, description="Project ID", validation_alias=AliasPath("task", "goalId"))
+    project_name: str | None = Field(
+        default=None, description="Project name", validation_alias=AliasPath("task", "goalName")
+    )
+    student_login: str | None = Field(
+        default=None,
+        description="Reviewee student login",
+        validation_alias=AliasPath("verifiableInfo", "verifiableStudents", 0, "login"),
+    )
+    url: str | None = Field(default=None, description="URL of the online review call", alias="vcLinkUrl")
+
+
+class BookingChanges[T: BookingBase](BaseModel):
+    new: list[T]
+    cancelled: list[T]
+    active: list[T]
 
 
 class SlotsInfo(S21Model):

@@ -240,7 +240,7 @@ class TestBotManager:
         s21_client.get_slots_info = AsyncMock(
             return_value=slots_info_factory(
                 booked=0,
-                time_slots=[timeslot_factory(valid_start_times=[start], staff_slot=True)],
+                time_slots=[timeslot_factory(valid_start_times=[start], staff_slot=False)],
             )
         )
         booking_manager.book_dry = AsyncMock()
@@ -310,7 +310,8 @@ class TestBotManager:
         timeslot_factory: Callable[..., TimeSlot],
         now: datetime,
     ) -> None:
-        later = timeslot_factory(valid_start_times=[now + timedelta(hours=1)], staff_slot=False)
-        earlier = timeslot_factory(valid_start_times=[now + timedelta(minutes=10)], staff_slot=True)
-        assert bot_manager._pick_candidate_start([later, earlier]) == (now + timedelta(minutes=10), True)
+        earlier_time, later_time = now + timedelta(minutes=10), now + timedelta(hours=1)
+        later = timeslot_factory(valid_start_times=[later_time], staff_slot=False)
+        earlier = timeslot_factory(valid_start_times=[earlier_time], staff_slot=True)
+        assert bot_manager._pick_candidate_start([later, earlier]) == later_time
         assert bot_manager._pick_candidate_start([]) is None

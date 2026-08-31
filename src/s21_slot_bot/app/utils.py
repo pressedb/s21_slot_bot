@@ -3,13 +3,13 @@ from datetime import tzinfo
 from telegram import Update
 
 from s21_slot_bot.app.errors import AppNotInitializedError, InternalError
-from s21_slot_bot.app.models import CustomContext
+from s21_slot_bot.app.models import App, CustomContext
 
 
-def get_tzinfo(context: CustomContext) -> tzinfo:
-    if not context.bot.defaults:
+def get_tzinfo(context_app: CustomContext | App) -> tzinfo:
+    if not context_app.bot.defaults:
         raise AppNotInitializedError("приложение не инициализировано: значения по умолчанию не заданы")
-    return context.bot.defaults.tzinfo
+    return context_app.bot.defaults.tzinfo
 
 
 def get_message_text(update: Update) -> str:

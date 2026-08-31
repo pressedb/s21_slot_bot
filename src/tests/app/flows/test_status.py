@@ -12,7 +12,7 @@ from s21_slot_bot.app.flows.actions import StatusFlowAction
 from s21_slot_bot.app.flows.status import StatusFlow
 from s21_slot_bot.app.messenger import Messenger
 from s21_slot_bot.app.models import BotInstance, CustomContext, Lifecycle
-from s21_slot_bot.client.models import Booking, DryBooking
+from s21_slot_bot.client.models import DryRevieweeBooking
 
 
 class TestStatusFlow:
@@ -92,7 +92,7 @@ class TestStatusFlow:
         bot_manager: BotManager,
         booking_manager: BookingManager,
         bot_instance_factory: Callable[..., BotInstance],
-        booking_factory: Callable[..., Booking],
+        reviewee_booking_factory,
         context: CustomContext,
         now: datetime,
     ) -> None:
@@ -104,16 +104,17 @@ class TestStatusFlow:
         inst.stats.currently_booked = 1
         bot_manager._bots = {inst.cfg.bot_id: inst}
         booking_manager._state = Lifecycle.RUNNING
-        booking_manager._bookings = {
-            "b1": booking_factory(project_name=inst.cfg.project_name, start=now + timedelta(minutes=30))
+        booking_manager._reviewee_bookings = {
+            "b1": reviewee_booking_factory(project_name=inst.cfg.project_name, start=now + timedelta(minutes=30))
         }
-        booking_manager._dry_bookings = {
-            "d1": DryBooking(
-                dry_run_id="d1",
+        booking_manager._dry_reviewee_bookings = {
+            "d1": DryRevieweeBooking(
+                id="d1",
                 answer_id="a1",
                 project_id=inst.cfg.project_id,
                 project_name=inst.cfg.project_name,
                 start=now + timedelta(minutes=45),
+                end=now + timedelta(hours=1),
             )
         }
         context.ensured_chat_data.last_booking_refresh_time = now

@@ -11,7 +11,7 @@ from s21_slot_bot.app.flows.actions import StatusFlowAction
 from s21_slot_bot.app.flows.base import Flow
 from s21_slot_bot.app.models import BotInstance, CustomContext, Lifecycle
 from s21_slot_bot.app.utils import get_tzinfo
-from s21_slot_bot.client.models import Booking, DryBooking
+from s21_slot_bot.client.models import DryRevieweeBooking, RevieweeBooking
 from s21_slot_bot.common.logger import get_user_input_logger
 from s21_slot_bot.common.strings import backtick_wrap, ensure_str
 from s21_slot_bot.common.time import dt_to_markdown, dt_to_pretty
@@ -82,8 +82,8 @@ class StatusFlow(Flow):
             return status_lines
 
         project_names_to_bots: dict[str, list[BotInstance]] = defaultdict(list)
-        bookings = self._booking_manager.bookings
-        dry_bookings = self._booking_manager.dry_bookings
+        bookings = self._booking_manager.reviewee_bookings
+        dry_bookings = self._booking_manager.dry_reviewee_bookings
         for bot in all_bots:
             project_names_to_bots[bot.cfg.project_name].append(bot)
 
@@ -146,8 +146,8 @@ class StatusFlow(Flow):
     def _get_booking_lines(
         self,
         project_name: str,
-        bookings: dict[str, Booking],
-        dry_bookings: dict[str, DryBooking],
+        bookings: dict[str, RevieweeBooking],
+        dry_bookings: dict[str, DryRevieweeBooking],
         context: CustomContext,
     ) -> list[str]:
         start_to_dry: dict[AwareDatetime, bool] = {}

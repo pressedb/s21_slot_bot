@@ -198,13 +198,13 @@ class TestSchool21Client:
                             "id": "booking-1",
                             "answerId": "answer-1",
                             "task": {"goalId": "project-1", "goalName": "Project 1"},
-                            "eventSlot": {"start": now.isoformat()},
+                            "eventSlot": {"start": now.isoformat(), "end": end},
                         }
                     ]
                 }
             }
         )
-        bookings = await s21_client.get_bookings(now, end, logger_mock)
+        bookings = await s21_client.get_reviewee_bookings(now, end, logger_mock)
         assert bookings["booking-1"].project_id == "project-1"
 
     async def test_book_disables_retry_middleware(
@@ -214,7 +214,7 @@ class TestSchool21Client:
         now: datetime,
     ) -> None:
         s21_client._graphql = AsyncMock(return_value={"student": {"addBookingP2PToEventSlot": {"id": "booking-1"}}})
-        assert await s21_client.book("answer-1", now, logger_mock, is_staff_slot=True) == "booking-1"
+        assert await s21_client.book("answer-1", now, logger_mock) == "booking-1"
         assert s21_client._graphql.await_args.kwargs["overridden_middleware"] == (s21_client._auth_middleware,)
 
     @pytest.mark.parametrize(
@@ -247,7 +247,7 @@ class TestSchool21Client:
         with pytest.raises(School21ParsingError):
             await s21_client.get_slots_info("task", now, now + timedelta(hours=1), logger_mock)
         with pytest.raises(School21ParsingError):
-            await s21_client.get_bookings(now, now + timedelta(hours=1), logger_mock)
+            await s21_client.get_reviewee_bookings(now, now + timedelta(hours=1), logger_mock)
         with pytest.raises(School21ParsingError):
             await s21_client.book("answer", now, logger_mock)
 

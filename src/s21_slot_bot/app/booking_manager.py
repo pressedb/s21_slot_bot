@@ -1,6 +1,6 @@
 import asyncio
-from collections import defaultdict
-from datetime import UTC, datetime
+from collections.abc import Sequence
+from datetime import UTC, datetime, tzinfo
 from typing import Literal
 
 import cashews
@@ -27,7 +27,16 @@ from s21_slot_bot.app.models import (
 )
 from s21_slot_bot.app.utils import get_tzinfo
 from s21_slot_bot.client.errors import School21Error, School21NoPointsError, School21SlotNotFoundError
-from s21_slot_bot.client.models import Booking, BookingBase, DryBooking
+from s21_slot_bot.client.models import (
+    ActualBooking,
+    BookingBase,
+    BookingChanges,
+    BookingDirection,
+    DryRevieweeBooking,
+    NotificationKey,
+    RevieweeBooking,
+    VerifierBooking,
+)
 from s21_slot_bot.client.s21_client import School21Client
 from s21_slot_bot.common.id import hash_id
 from s21_slot_bot.common.logger import LogEntity, LoggerLike, get_id_logger
@@ -46,23 +55,28 @@ class BookingManager:
     ):
         self._s21_client = s21_client
         self._messenger = messenger
-        self._dry_bookings: dict[str, DryBooking] = {}
         self._state = Lifecycle.STOPPED
-        self._bookings: dict[str, Booking] = {}
+        self._dry_reviewee_bookings: dict[str, DryRevieweeBooking] = {}
+        self._reviewee_bookings: dict[str, RevieweeBooking] = {}
+        self._verifier_bookings: dict[str, VerifierBooking] = {}
         self._booking_lock = asyncio.Lock()
-        self._notifications_sent: dict[str, bool] = {}
+        self._notifications_sent: set[NotificationKey] = set()
         self._app = app
         self._refresh_interval = refresh_interval
         self._chat_id = chat_id
         self._job: Job[CustomContext] | None = None
 
     @property
-    def bookings(self) -> dict[str, Booking]:
-        return self._bookings.copy()
+    def reviewee_bookings(self) -> dict[str, RevieweeBooking]:
+        return self._reviewee_bookings.copy()
 
     @property
-    def dry_bookings(self) -> dict[str, DryBooking]:
-        return self._dry_bookings.copy()
+    def dry_reviewee_bookings(self) -> dict[str, DryRevieweeBooking]:
+        return self._dry_reviewee_bookings.copy()
+
+    @property
+    def verifier_bookings(self) -> dict[str, VerifierBooking]:
+        return self._verifier_bookings.copy()
 
     @property
     def state(self) -> Lifecycle:
@@ -71,6 +85,14 @@ class BookingManager:
     @property
     def is_refreshing(self) -> bool:
         return self._job is not None
+
+    async def initialize_verifier_bookings(self, app: App, logger: LoggerLike) -> None:
+        logger.info("Initializing verifier bookings")
+        now = datetime.now(tz=get_tzinfo(app))
+        search_to = now + CURRENT_BOOKINGS_SEARCH_WINDOW
+        bookings = await self._s21_client.get_verifier_bookings(now, search_to, logger)
+        async with self._booking_lock:
+            self._verifier_bookings = bookings
 
     async def start_refreshing(self, logger: LoggerLike, run_immediately: bool = True) -> None:
         if not self._app.job_queue:
@@ -113,21 +135,21 @@ class BookingManager:
         inst: BotInstance,
         answer_id: str,
         start_time: datetime,
+        end_time: datetime,
         context: CustomContext,
-        is_staff_slot: bool = False,
     ) -> None:
         cfg = inst.cfg
         dry_run_id = hash_id(f"{cfg.project_id}|{start_time}")
-        dry_booking = DryBooking(
-            dry_run_id=dry_run_id,
-            is_staff_slot=is_staff_slot,
+        dry_booking = DryRevieweeBooking(
+            id=dry_run_id,
             answer_id=answer_id,
             project_id=cfg.project_id,
             project_name=cfg.project_name,
             start=start_time,
+            end=end_time,
         )
         async with self._booking_lock:
-            self._dry_bookings[dry_run_id] = dry_booking
+            self._dry_reviewee_bookings[dry_run_id] = dry_booking
         inst.stats.attempts_success += 1
         kb = InlineKeyboardMarkup(
             [
@@ -154,30 +176,31 @@ class BookingManager:
         inst: BotInstance,
         answer_id: str,
         start_time: datetime,
+        end_time: datetime,
         logger: LoggerLike,
         context: CustomContext,
-        is_staff_slot: bool = False,
     ) -> bool:
         are_review_points_left = True
         cfg = inst.cfg
         tz = get_tzinfo(context)
         try:
+            await self.refresh_now(context, logger)
             async with self._booking_lock:
                 booking_id = await self._s21_client.book(
                     answer_id=answer_id,
                     start_time=start_time,
-                    is_staff_slot=is_staff_slot,
                     logger=logger,
                 )
-                booking = Booking(
+                booking = RevieweeBooking(
                     id=booking_id,
                     answer_id=answer_id,
                     project_id=cfg.project_id,
                     project_name=cfg.project_name,
                     start=start_time,
+                    end=end_time,
                     is_online=True,
                 )
-                self._bookings[booking_id] = booking
+                self._reviewee_bookings[booking_id] = booking
             inst.stats.currently_booked += 1
             inst.stats.attempts_success += 1
             await self._messenger.send(
@@ -212,33 +235,30 @@ class BookingManager:
             )
         return are_review_points_left
 
-    def pop_dry(self, dry_run_id: str) -> DryBooking | None:
-        dry_booking = self._dry_bookings.pop(dry_run_id, None)
+    def pop_dry(self, dry_run_id: str) -> DryRevieweeBooking | None:
+        dry_booking = self._dry_reviewee_bookings.pop(dry_run_id, None)
         return dry_booking
 
-    # TODO: add checks and notifications for booked/cancelled when the user opened slots for review?
     async def _refresh_bookings(self, context: CustomContext) -> None:
         logger = get_id_logger(LogEntity.BOOKING_REFRESHER)
         logger.info("Refreshing bookings")
         now = datetime.now(tz=get_tzinfo(context))
         search_to = now + CURRENT_BOOKINGS_SEARCH_WINDOW
         try:
-            fresh_bookings = await self._s21_client.get_bookings(now, search_to, logger)
-            async with self._booking_lock:
-                stale_bookings = self._bookings.copy()
-                self._bookings = fresh_bookings
-                self._remove_expired_dry_bookings(now)
+            fresh_reviewee_bookings, fresh_verifier_bookings = await asyncio.gather(
+                self._s21_client.get_reviewee_bookings(now, search_to, logger),
+                self._s21_client.get_verifier_bookings(now, search_to, logger),
+            )
+            reviewee_changes, verifier_changes = await self._update_bookings(
+                fresh_reviewee_bookings, fresh_verifier_bookings, now, logger
+            )
             context.ensured_chat_data.last_booking_refresh_time = now
-            cancelled_bookings = self._get_cancelled_bookings(fresh_bookings, stale_bookings, now, logger)
-            if cancelled_bookings:
-                await self._notify_on_cancelled_reviews(cancelled_bookings, context, logger)
-            for booking_id, booking in fresh_bookings.items():
-                if (
-                    not is_expired_booking(booking, now)
-                    and booking.start - now <= UPCOMING_REVIEW_REMINDER_WINDOW
-                    and not self._notifications_sent.get(booking_id, False)
-                ):
-                    await self._notify_on_upcoming_review(booking, context, logger)
+            if verifier_changes.new:
+                await self._notify_on_new_verifier_reviews(verifier_changes.new, context, logger)
+            for changes in (reviewee_changes, verifier_changes):
+                if changes.cancelled:
+                    await self._notify_on_cancelled_reviews(changes.cancelled, context, logger)
+                await self._notify_on_upcoming_reviews(changes.active, context, now, logger)
         except School21Error as e:
             logger.exception("Failed to refresh bookings")
             self.stop_refreshing(logger, state=Lifecycle.FAILED)
@@ -246,73 +266,177 @@ class BookingManager:
                 f"ошибка при получении актуальных проверок, задача остановлена: {e.message}"
             ) from e
 
-    def _remove_expired_dry_bookings(self, now: AwareDatetime) -> None:
-        non_expired_dry_bookings: dict[str, DryBooking] = {}
-        for booking_id, booking in self._dry_bookings.items():
-            if not is_expired_booking(booking, now):
-                non_expired_dry_bookings[booking_id] = booking
-        self._dry_bookings = non_expired_dry_bookings
-
-    def _get_cancelled_bookings(
+    async def _update_bookings(
         self,
-        fresh_bookings: dict[str, Booking],
-        stale_bookings: dict[str, Booking],
-        now: datetime,
+        fresh_reviewee_bookings: dict[str, RevieweeBooking],
+        fresh_verifier_bookings: dict[str, VerifierBooking],
+        now: AwareDatetime,
         logger: LoggerLike,
-    ) -> list[Booking]:
-        removed_ids = stale_bookings.keys() - fresh_bookings.keys()
-        cancelled_ids = set()
-        expired_ids = set()
-        for removed_id in removed_ids:
-            self._notifications_sent.pop(removed_id, None)
-            stale = stale_bookings[removed_id]
-            if is_expired_booking(stale, now):
-                expired_ids.add(removed_id)
-            else:
-                cancelled_ids.add(removed_id)
-        if expired_ids:
-            expired_bookings = {
-                stale_bookings[exp_id].project_name: stale_bookings[exp_id].start for exp_id in expired_ids
-            }
-            logger.info("Expired bookings: %s", expired_bookings)
-        cancelled_bookings = [stale_bookings[cancelled_id] for cancelled_id in cancelled_ids]
-        return cancelled_bookings
+    ) -> tuple[BookingChanges[RevieweeBooking], BookingChanges[VerifierBooking]]:
+        async with self._booking_lock:
+            stale_reviewee_bookings = self._reviewee_bookings
+            stale_verifier_bookings = self._verifier_bookings
+            reviewee_changes = self._get_booking_changes(fresh_reviewee_bookings, stale_reviewee_bookings, now, logger)
+            verifier_changes = self._get_booking_changes(fresh_verifier_bookings, stale_verifier_bookings, now, logger)
+            self._reviewee_bookings = fresh_reviewee_bookings
+            self._verifier_bookings = fresh_verifier_bookings
+            self._remove_expired_dry_bookings(now, logger)
+        return reviewee_changes, verifier_changes
 
-    async def _notify_on_upcoming_review(self, booking: Booking, context: CustomContext, logger: LoggerLike) -> None:
-        logger.info("Sending a notification about an upcoming review of %s at %s", booking.project_name, booking.start)
-        link_text = f"\nссылка для подключения: {booking.url}" if booking.url else ""
-        text = (
-            f"🔔 проверка проекта {backtick_wrap(booking.project_name)} начинается в {dt_to_markdown(booking.start, tz=get_tzinfo(context))}!"
-            + link_text
-        )
-        await self._messenger.send(context, text, parse_mode=ParseMode.MARKDOWN_V2)
-        self._notifications_sent[booking.id] = True
-
-    @cashews.invalidate("get_review_info:*")
-    async def _notify_on_cancelled_reviews(
+    def _get_booking_changes[T: ActualBooking](
         self,
-        cancelled_bookings: list[Booking],
+        fresh_bookings: dict[str, T],
+        stale_bookings: dict[str, T],
+        now: AwareDatetime,
+        logger: LoggerLike,
+    ) -> BookingChanges[T]:
+        new_ids = fresh_bookings.keys() - stale_bookings.keys()
+        removed_ids = stale_bookings.keys() - fresh_bookings.keys()
+        new_bookings = [fresh_bookings[booking_id] for booking_id in new_ids]
+        cancelled_bookings: list[T] = []
+        expired_bookings: list[T] = []
+        for booking_id in removed_ids:
+            booking = stale_bookings[booking_id]
+            self._notifications_sent.discard(self._get_notification_key(booking))
+            if is_expired_booking(booking, now):
+                expired_bookings.append(booking)
+            else:
+                cancelled_bookings.append(booking)
+        if expired_bookings:
+            logger.info("Expired bookings: %s", {booking.id: booking.start for booking in expired_bookings})
+        changes: BookingChanges[T] = BookingChanges(
+            new=new_bookings,
+            cancelled=cancelled_bookings,
+            active=list(fresh_bookings.values()),
+        )
+        return changes
+
+    async def _notify_on_new_verifier_reviews(
+        self,
+        bookings: list[VerifierBooking],
         context: CustomContext,
         logger: LoggerLike,
     ) -> None:
+        logger.info(
+            "Notifying on new verifier bookings: %s",
+            {
+                booking.id: {
+                    "project": booking.project_name,
+                    "student": booking.student_login,
+                    "start": booking.start,
+                }
+                for booking in bookings
+            },
+        )
+        header = "📝 на твою проверку записались!" if len(bookings) == 1 else "📝 на твои проверки записались!"
         tz = get_tzinfo(context)
-        project_to_times: defaultdict[str, list[str]] = defaultdict(list)
-        for booking in cancelled_bookings:
-            start_pretty = dt_to_pretty(booking.start, tz=tz)
-            project_to_times[booking.project_name].append(start_pretty)
-        logger.info("Notifying on cancelled reviews: %s", project_to_times)
-        warning = ["⚠️ проверка отменена!" if len(cancelled_bookings) == 1 else "⚠️ проверки отменены!"]
-        lines = []
-        for project_name, cancelled_times in project_to_times.items():
-            time_message = (
-                f"слот на {cancelled_times[0]}"
-                if len(cancelled_times) == 1
-                else f"слоты на {', '.join(cancelled_times)}"
-            )
-            line = f"🚫 проект {project_name} - {time_message}"
-            lines.append(line)
-        text = "\n".join(warning + lines)
+        text = self._format_bookings_message(bookings, header, tz)
         await self._messenger.send(context, text)
+
+    async def _notify_on_cancelled_reviews(
+        self,
+        bookings: Sequence[ActualBooking],
+        context: CustomContext,
+        logger: LoggerLike,
+    ) -> None:
+        logger.info(
+            "Notifying on cancelled reviews: %s",
+            {
+                booking.id: {
+                    "project": booking.project_name,
+                    "student": booking.student_login,
+                    "start": booking.start,
+                }
+                for booking in bookings
+            },
+        )
+        first = bookings[0]
+        match first:
+            case RevieweeBooking():
+                header = "⚠️ проверка отменена!" if len(bookings) == 1 else "⚠️ проверки отменены!"
+                await cashews.cache.delete_match("get_review_info:*")
+            case VerifierBooking():
+                header = (
+                    "⚠️ запись на твою проверку отменена!"
+                    if len(bookings) == 1
+                    else "⚠️ записи на твои проверки отменены!"
+                )
+        tz = get_tzinfo(context)
+        text = self._format_bookings_message(bookings, header, tz)
+        await self._messenger.send(context, text)
+
+    async def _notify_on_upcoming_reviews(
+        self,
+        bookings: Sequence[ActualBooking],
+        context: CustomContext,
+        now: AwareDatetime,
+        logger: LoggerLike,
+    ) -> None:
+        tz = get_tzinfo(context)
+        for booking in bookings:
+            notification_key = self._get_notification_key(booking)
+            if (
+                notification_key in self._notifications_sent
+                or is_expired_booking(booking, now)
+                or booking.start - now > UPCOMING_REVIEW_REMINDER_WINDOW
+            ):
+                continue
+            logger.info("Sending upcoming review notification for booking %s at %s", booking.id, booking.start)
+            match booking:
+                case RevieweeBooking():
+                    header = "🔔 скоро начинается проверка твоего проекта!"
+                case VerifierBooking():
+                    header = "🔔 скоро начинается проверка, которую ты проводишь!"
+            text = self._format_bookings_message([booking], header, tz)
+            await self._messenger.send(context, text)
+            self._notifications_sent.add(notification_key)
+
+    def _remove_expired_dry_bookings(self, now: AwareDatetime, logger: LoggerLike) -> None:
+        expired: dict[str, DryRevieweeBooking] = {}
+        non_expired: dict[str, DryRevieweeBooking] = {}
+        for booking_id, booking in self._dry_reviewee_bookings.items():
+            if is_expired_booking(booking, now):
+                expired[booking_id] = booking
+            else:
+                non_expired[booking_id] = booking
+        if expired:
+            logger.info(
+                "Removing %d expired dry bookings: %s",
+                len(expired),
+                {
+                    booking.id: {
+                        "project": booking.project_name,
+                        "start": booking.start,
+                    }
+                    for booking in expired.values()
+                },
+            )
+        self._dry_reviewee_bookings = non_expired
+
+    def _get_notification_key(self, booking: ActualBooking) -> NotificationKey:
+        match booking:
+            case RevieweeBooking():
+                direction = BookingDirection.REVIEWEE
+            case VerifierBooking():
+                direction = BookingDirection.VERIFIER
+        key = NotificationKey(id=booking.id, direction=direction)
+        return key
+
+    def _format_booking_details(self, booking: ActualBooking, tz: tzinfo) -> list[str]:
+        lines = [f"🕒 {dt_to_pretty(booking.start, tz=tz)} → {dt_to_pretty(booking.end, tz=tz)}"]
+        if booking.project_name:
+            lines.append(f"📚 проект: {booking.project_name}")
+        if booking.student_login:
+            lines.append(f"👤 студент: {booking.student_login}")
+        if booking.url:
+            lines.append(f"🔗 ссылка для подключения: {booking.url}")
+        return lines
+
+    def _format_bookings_message(self, bookings: Sequence[ActualBooking], header: str, tz: tzinfo) -> str:
+        sections = [header]
+        for booking in sorted(bookings, key=lambda item: item.start):
+            sections.append("\n".join(self._format_booking_details(booking, tz)))
+        return "\n\n".join(sections)
 
 
 def is_expired_booking(booking: BookingBase, now: AwareDatetime) -> bool:

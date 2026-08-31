@@ -28,14 +28,13 @@ class BookFlow(Flow):
                     raise BotRuntimeError(
                         f"бот #{bot_id} ({cfg.project_name}): не удалось найти сохраненную запись о найденном слоте"
                     )
-
                 logger.info("Attempting to book answer_id `%s` at `%s`", dry_booking.answer_id, dry_booking.start)
                 try:
                     are_review_points_left = await self._booking_manager.book(
                         inst=inst,
                         answer_id=dry_booking.answer_id,
                         start_time=dry_booking.start,
-                        is_staff_slot=dry_booking.is_staff_slot,
+                        end_time=dry_booking.end,
                         logger=logger,
                         context=context,
                     )

@@ -104,18 +104,19 @@ class SlotBotService:
         self._tg_app.post_init = self._post_init
         self._tg_app.post_stop = self._post_stop
 
-    async def _post_init(self, _: App) -> None:
+    async def _post_init(self, app: App) -> None:
         logger = get_id_logger(LogEntity.SERVICE_HOOK)
         logger.info("Running custom post-init application hook...")
         self._cache_setup("mem://")
         await self._s21_client.start()
+        await self._booking_manager.initialize_verifier_bookings(app, logger)
         if not self._config.bot.should_refresh_bookings_only_on_active_bots:
             await self._booking_manager.start_refreshing(logger, run_immediately=False)
 
-    async def _post_stop(self, application: App) -> None:
+    async def _post_stop(self, app: App) -> None:
         logger = get_id_logger(LogEntity.SERVICE_HOOK)
         logger.info("Running custom post-stop application hook...")
-        chat_data = application.chat_data.get(self._chat_id)
+        chat_data = app.chat_data.get(self._chat_id)
         if chat_data:
             await self._messenger.safe_delete(chat_data.menu_error_msg_id, logger)
             await self._messenger.safe_delete(chat_data.menu_msg_id, logger)
