@@ -84,7 +84,6 @@ class BotManager:
             self._search, cfg.interval_sec, data=job_data, chat_id=self._chat_id, name=cfg.bot_id
         )
         logger.info("Started bot #%s", cfg.bot_id)
-        await self._booking_manager.start_refreshing(logger)
         await job.run(context.application)  # type: ignore [arg-type]
 
     def stop_bot(
@@ -99,9 +98,6 @@ class BotManager:
             logger.warning("Unable to find bot `%s`", bot_id)
             return False
         inst.state = state
-        has_running_bots = bool(self.list_all(states={Lifecycle.RUNNING}))
-        if not has_running_bots and self._bot_config.should_refresh_bookings_only_on_active_bots:
-            self._booking_manager.stop_refreshing(logger)
         jobs = context.ensured_job_queue.get_jobs_by_name(bot_id)
         if not jobs:
             logger.info("Unable to find job for bot `%s`", bot_id)

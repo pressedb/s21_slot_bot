@@ -42,7 +42,6 @@ class TestBotManager:
         self,
         bot_manager: BotManager,
         s21_client: School21Client,
-        booking_manager: BookingManager,
         bot_instance_factory: Callable[..., BotInstance],
         context: CustomContext,
         job_queue_mock: JobQueue,
@@ -51,14 +50,12 @@ class TestBotManager:
     ) -> None:
         inst = bot_instance_factory()
         s21_client.get_task_and_answer = AsyncMock(return_value=("task-1", "answer-1"))
-        booking_manager.start_refreshing = AsyncMock()
         job_queue_mock.run_repeating.return_value = job_mock
 
         await bot_manager.start_bot(inst, context, logger_mock)
 
         assert inst.state == Lifecycle.RUNNING
         assert bot_manager.get_bot(inst.cfg.bot_id) is inst
-        booking_manager.start_refreshing.assert_awaited_once_with(logger_mock)
         job_mock.run.assert_awaited_once_with(context.application)
 
     async def test_start_bot_wraps_setup_failure(
@@ -92,21 +89,16 @@ class TestBotManager:
     ) -> None:
         inst = bot_instance_factory(state=Lifecycle.RUNNING)
         bot_manager._bots[inst.cfg.bot_id] = inst
-        bot_manager._bot_config.should_refresh_bookings_only_on_active_bots = True
-        booking_manager.stop_refreshing = MagicMock()
 
         job_queue_mock.get_jobs_by_name.return_value = []
         assert bot_manager.stop_bot(inst.cfg.bot_id, context, logger_mock)
-        booking_manager.stop_refreshing.assert_called_once()
 
         inst.state = Lifecycle.RUNNING
-        booking_manager.stop_refreshing.reset_mock()
         other = bot_instance_factory(bot_id="other", state=Lifecycle.RUNNING)
         bot_manager._bots[other.cfg.bot_id] = other
         jobs = [MagicMock(spec=Job), MagicMock(spec=Job)]
         job_queue_mock.get_jobs_by_name.return_value = jobs
         assert bot_manager.stop_bot(inst.cfg.bot_id, context, logger_mock)
-        booking_manager.stop_refreshing.assert_not_called()
         for job in jobs:
             job.schedule_removal.assert_called_once()
 

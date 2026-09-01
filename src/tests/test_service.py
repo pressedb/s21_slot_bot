@@ -44,29 +44,12 @@ class TestSlotBotService:
         tg_app_mock: Application,
     ) -> None:
         s21_client.start = AsyncMock()
-        s21_client.get_verifier_bookings = AsyncMock()
+        booking_manager.initialize_verifier_bookings = AsyncMock()
         booking_manager.start_refreshing = AsyncMock()
-        config.bot.should_refresh_bookings_only_on_active_bots = False
         await service._post_init(tg_app_mock)
         s21_client.start.assert_awaited_once()
-        s21_client.get_verifier_bookings.assert_awaited_once()
+        booking_manager.initialize_verifier_bookings.assert_awaited_once()
         booking_manager.start_refreshing.assert_awaited_once()
-
-    async def test_post_init_active_bot_mode(
-        self,
-        service: SlotBotService,
-        s21_client: School21Client,
-        booking_manager: BookingManager,
-        config: SlotBotServiceConfig,
-        tg_app_mock: Application,
-    ) -> None:
-        s21_client.start = AsyncMock()
-        s21_client.get_verifier_bookings = AsyncMock()
-        booking_manager.start_refreshing = AsyncMock()
-        config.bot.should_refresh_bookings_only_on_active_bots = True
-        await service._post_init(tg_app_mock)
-        s21_client.get_verifier_bookings.assert_awaited_once()
-        booking_manager.start_refreshing.assert_not_awaited()
 
     async def test_post_stop(
         self,

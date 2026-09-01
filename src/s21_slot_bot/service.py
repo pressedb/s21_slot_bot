@@ -110,8 +110,7 @@ class SlotBotService:
         self._cache_setup("mem://")
         await self._s21_client.start()
         await self._booking_manager.initialize_verifier_bookings(app, logger)
-        if not self._config.bot.should_refresh_bookings_only_on_active_bots:
-            await self._booking_manager.start_refreshing(logger, run_immediately=False)
+        await self._booking_manager.start_refreshing(logger, run_immediately=False)
 
     async def _post_stop(self, app: App) -> None:
         logger = get_id_logger(LogEntity.SERVICE_HOOK)
