@@ -12,6 +12,7 @@ from s21_slot_bot.app.models import CustomContext, FlowCategory, Mode, Screen
 from s21_slot_bot.client.consts import MIN_REQUIRED_REVIEWS
 from s21_slot_bot.client.models import ProjectExtended
 from s21_slot_bot.client.s21_client import School21Client
+from s21_slot_bot.common import markdown
 from s21_slot_bot.common.logger import get_user_input_logger
 
 
@@ -138,10 +139,10 @@ class CustomInputFlow(Flow, ABC):
                 ],
             )
         kb = InlineKeyboardMarkup(buttons)
+        link = markdown.format_inline_link("поддерживаемые строковые форматы", PYDANTIC_DATETIME_DOCS_URL)
         text = (
             self._get_chosen_project_info_text(context, action, is_markdown=True) + "выбери начальное время поиска\n"
-            "(или введи вручную в формате [YYYY-MM-DD] HH:MM[:SS] - "
-            f"[поддерживаемые строковые форматы]({PYDANTIC_DATETIME_DOCS_URL})):"
+            f"(или введи вручную в формате [YYYY-MM-DD] HH:MM[:SS] - {link}):"
         )
         await self._messenger.render_menu_message(context, text, logger, kb=kb, parse_mode=ParseMode.MARKDOWN_V2)
 

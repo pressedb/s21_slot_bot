@@ -1,9 +1,10 @@
 import pytest
 
+from s21_slot_bot.common import markdown
 from s21_slot_bot.common.markdown import MarkdownV2Escaper
 
 
-class TestMarkdownV2Escaper:
+class TestMarkdown:
     @pytest.fixture
     def escaper(self) -> MarkdownV2Escaper:
         return MarkdownV2Escaper()
@@ -44,3 +45,13 @@ class TestMarkdownV2Escaper:
 
     def test_escape_mixed_plain_text_and_supported_entity(self, escaper: MarkdownV2Escaper) -> None:
         assert escaper.escape("Result: *done*!") == r"Result: *done*\!"
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("hello", "`hello`"),
+            ("``already ``contains `backticks```", "`already contains backticks`"),
+        ],
+    )
+    def test_backtick_wrap(self, value: str, expected: str) -> None:
+        assert markdown.backtick_wrap(value) == expected

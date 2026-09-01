@@ -11,8 +11,3 @@ def ensure_str(field: Any, getter: Callable[..., str] | None = None, default: st
         return str(value)
     except Exception:  # noqa: BLE001
         return default
-
-
-def backtick_wrap(text: str) -> str:
-    text = text.replace("`", "")
-    return f"`{text}`"

@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from s21_slot_bot.common.strings import backtick_wrap, ensure_str
+from s21_slot_bot.common.strings import ensure_str
 
 
 class TestStrings:
@@ -35,13 +35,3 @@ class TestStrings:
             raise ValueError("boom")
 
         assert ensure_str("hello", getter=failing_getter) == "-"
-
-    @pytest.mark.parametrize(
-        ("value", "expected"),
-        [
-            ("hello", "`hello`"),
-            ("``already ``contains `backticks```", "`already contains backticks`"),
-        ],
-    )
-    def test_backtick_wrap(self, value: str, expected: str) -> None:
-        assert backtick_wrap(value) == expected

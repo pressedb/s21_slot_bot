@@ -12,7 +12,7 @@ from s21_slot_bot.app.flows.actions import StatusFlowAction
 from s21_slot_bot.app.flows.status import StatusFlow
 from s21_slot_bot.app.messenger import Messenger
 from s21_slot_bot.app.models import BotInstance, CustomContext, Lifecycle
-from s21_slot_bot.client.models import DryRevieweeBooking
+from s21_slot_bot.client.models import DryRevieweeBooking, VerifierBooking
 
 
 class TestStatusFlow:
@@ -123,3 +123,26 @@ class TestStatusFlow:
         assert "📝 запись" in text
         assert "🔍 найден слот" in text
         assert "интервал: 30" in text
+
+    def test_get_status_text_with_verifier_bookings(
+        self,
+        status_flow: StatusFlow,
+        booking_manager: BookingManager,
+        verifier_booking_factory: Callable[..., VerifierBooking],
+        context: CustomContext,
+        now: datetime,
+    ) -> None:
+        booking = verifier_booking_factory(
+            start=now + timedelta(hours=1),
+            project_name="SQLB9_OLAP",
+            student_login="student",
+            url="https://call",
+        )
+        booking_manager._verifier_bookings = {booking.id: booking}
+
+        text = "\n".join(status_flow._get_status_lines(context))
+
+        assert "твои проверки" in text
+        assert "SQLB9_OLAP" in text
+        assert "student" in text
+        assert "ссылка для подключения" in text

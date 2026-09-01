@@ -38,9 +38,9 @@ from s21_slot_bot.client.models import (
     VerifierBooking,
 )
 from s21_slot_bot.client.s21_client import School21Client
+from s21_slot_bot.common import markdown
 from s21_slot_bot.common.id import hash_id
 from s21_slot_bot.common.logger import LogEntity, LoggerLike, get_id_logger
-from s21_slot_bot.common.strings import backtick_wrap
 from s21_slot_bot.common.time import dt_to_markdown, dt_to_pretty, safe_isoz_to_dt
 
 
@@ -164,7 +164,7 @@ class BookingManager:
         )
         await self._messenger.send(
             context,
-            f"🔔 бот #{cfg.bot_id} ({backtick_wrap(cfg.project_name)}) остановлен: найден слот\n"
+            f"🔔 бот #{cfg.bot_id} ({markdown.backtick_wrap(cfg.project_name)}) остановлен: найден слот\n"
             f"начало: {dt_to_markdown(start_time, tz=get_tzinfo(context))}",
             kb=kb,
             parse_mode=ParseMode.MARKDOWN_V2,
@@ -205,7 +205,7 @@ class BookingManager:
             inst.stats.attempts_success += 1
             await self._messenger.send(
                 context,
-                f"✅ бот #{cfg.bot_id} ({backtick_wrap(cfg.project_name)}): записан\n"
+                f"✅ бот #{cfg.bot_id} ({markdown.backtick_wrap(cfg.project_name)}): записан\n"
                 f"начало: {dt_to_markdown(start_time, tz=tz)}\n"
                 f"проверок: {inst.stats.currently_booked}/{cfg.required_reviews}",
                 parse_mode=ParseMode.MARKDOWN_V2,
@@ -331,7 +331,12 @@ class BookingManager:
         header = "📝 на твою проверку записались!" if len(bookings) == 1 else "📝 на твои проверки записались!"
         tz = get_tzinfo(context)
         text = self._format_bookings_message(bookings, header, tz)
-        await self._messenger.send(context, text)
+        await self._messenger.send(context, text, parse_mode=ParseMode.MARKDOWN_V2)
+        now = datetime.now(tz=tz)
+        for booking in bookings:
+            if is_booking_coming_soon(booking, now):
+                notification_key = self._get_notification_key(booking)
+                self._notifications_sent.add(notification_key)
 
     async def _notify_on_cancelled_reviews(
         self,
@@ -363,7 +368,7 @@ class BookingManager:
                 )
         tz = get_tzinfo(context)
         text = self._format_bookings_message(bookings, header, tz)
-        await self._messenger.send(context, text)
+        await self._messenger.send(context, text, parse_mode=ParseMode.MARKDOWN_V2)
 
     async def _notify_on_upcoming_reviews(
         self,
@@ -375,11 +380,7 @@ class BookingManager:
         tz = get_tzinfo(context)
         for booking in bookings:
             notification_key = self._get_notification_key(booking)
-            if (
-                notification_key in self._notifications_sent
-                or is_expired_booking(booking, now)
-                or booking.start - now > UPCOMING_REVIEW_REMINDER_WINDOW
-            ):
+            if notification_key in self._notifications_sent or not is_booking_coming_soon(booking, now):
                 continue
             logger.info("Sending upcoming review notification for booking %s at %s", booking.id, booking.start)
             match booking:
@@ -388,7 +389,7 @@ class BookingManager:
                 case VerifierBooking():
                     header = "🔔 скоро начинается проверка, которую ты проводишь!"
             text = self._format_bookings_message([booking], header, tz)
-            await self._messenger.send(context, text)
+            await self._messenger.send(context, text, parse_mode=ParseMode.MARKDOWN_V2)
             self._notifications_sent.add(notification_key)
 
     def _remove_expired_dry_bookings(self, now: AwareDatetime, logger: LoggerLike) -> None:
@@ -422,22 +423,27 @@ class BookingManager:
         key = NotificationKey(id=booking.id, direction=direction)
         return key
 
-    def _format_booking_details(self, booking: ActualBooking, tz: tzinfo) -> list[str]:
-        lines = [f"🕒 {dt_to_pretty(booking.start, tz=tz)} → {dt_to_pretty(booking.end, tz=tz)}"]
-        if booking.project_name:
-            lines.append(f"📚 проект: {booking.project_name}")
-        if booking.student_login:
-            lines.append(f"👤 студент: {booking.student_login}")
-        if booking.url:
-            lines.append(f"🔗 ссылка для подключения: {booking.url}")
-        return lines
-
     def _format_bookings_message(self, bookings: Sequence[ActualBooking], header: str, tz: tzinfo) -> str:
         sections = [header]
         for booking in sorted(bookings, key=lambda item: item.start):
-            sections.append("\n".join(self._format_booking_details(booking, tz)))
+            sections.append("\n".join(format_booking_details(booking, tz)))
         return "\n\n".join(sections)
 
 
+def format_booking_details(booking: ActualBooking, tz: tzinfo) -> list[str]:
+    lines = [f"🕒 {dt_to_markdown(booking.start, tz=tz)} → {dt_to_markdown(booking.end, tz=tz)}"]
+    if booking.project_name:
+        lines.append(f"📚 проект: {markdown.backtick_wrap(booking.project_name)}")
+    if booking.student_login:
+        lines.append(f"👤 студент: {booking.student_login}")
+    if booking.url:
+        lines.append(f"🔗 {markdown.format_inline_link('ссылка для подключения', booking.url)}")
+    return lines
+
+
 def is_expired_booking(booking: BookingBase, now: AwareDatetime) -> bool:
-    return now >= booking.start
+    return booking.start <= now
+
+
+def is_booking_coming_soon(booking: BookingBase, now: AwareDatetime) -> bool:
+    return booking.start > now and booking.start - now <= UPCOMING_REVIEW_REMINDER_WINDOW

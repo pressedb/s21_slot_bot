@@ -1,19 +1,22 @@
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import assert_never, override
 
 from pydantic import AwareDatetime
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ParseMode
 
+from s21_slot_bot.app.booking_manager import format_booking_details
 from s21_slot_bot.app.consts import STATUS_LINE_INDENT
 from s21_slot_bot.app.errors import BookingRefresherError, InvalidCallbackDataError
 from s21_slot_bot.app.flows.actions import StatusFlowAction
 from s21_slot_bot.app.flows.base import Flow
 from s21_slot_bot.app.models import BotInstance, CustomContext, Lifecycle
 from s21_slot_bot.app.utils import get_tzinfo
-from s21_slot_bot.client.models import DryRevieweeBooking, RevieweeBooking
+from s21_slot_bot.client.models import DryRevieweeBooking, RevieweeBooking, VerifierBooking
+from s21_slot_bot.common import markdown
 from s21_slot_bot.common.logger import get_user_input_logger
-from s21_slot_bot.common.strings import backtick_wrap, ensure_str
+from s21_slot_bot.common.strings import ensure_str
 from s21_slot_bot.common.time import dt_to_markdown, dt_to_pretty
 
 
@@ -76,6 +79,9 @@ class StatusFlow(Flow):
         status_lines = self._get_base_lines()
         booking_refresher_lines = self._get_booking_refresher_lines(context)
         status_lines.append("\n".join(booking_refresher_lines))
+        if verifier_bookings := self._booking_manager.verifier_bookings.values():
+            verifier_booking_lines = self._get_verifier_booking_lines(verifier_bookings, context)
+            status_lines.append("\n".join(verifier_booking_lines))
         all_bots = self._bot_manager.list_all()
         if not all_bots:
             status_lines.append("📭 ботов нет")
@@ -88,7 +94,7 @@ class StatusFlow(Flow):
             project_names_to_bots[bot.cfg.project_name].append(bot)
 
         for project_name, project_bots in sorted(project_names_to_bots.items()):
-            status_lines.append(f"📁 {backtick_wrap(project_name)}")
+            status_lines.append(f"📁 {markdown.backtick_wrap(project_name)}")
             booking_lines = self._get_booking_lines(project_name, bookings, dry_bookings, context)
             if booking_lines:
                 status_lines.append("\n".join(booking_lines))
@@ -138,10 +144,21 @@ class StatusFlow(Flow):
         booking_refresher_lines = [
             f"{emoji} поиск актуальных проверок [{state}]",
             f"последний запуск: {last_refresh}",
-            "\n",
         ]
         self._add_indent(booking_refresher_lines, STATUS_LINE_INDENT, first_indent_delta=STATUS_LINE_INDENT)
         return booking_refresher_lines
+
+    def _get_verifier_booking_lines(
+        self, verifier_bookings: Iterable[VerifierBooking], context: CustomContext
+    ) -> list[str]:
+        verifier_booking_lines = ["твои проверки:"]
+        tz = get_tzinfo(context)
+        for booking in sorted(verifier_bookings, key=lambda item: item.start):
+            lines = format_booking_details(booking, tz)
+            verifier_booking_lines.extend(lines)
+        self._add_indent(verifier_booking_lines, STATUS_LINE_INDENT * 2, first_indent_delta=STATUS_LINE_INDENT)
+        verifier_booking_lines.append("\n")
+        return verifier_booking_lines
 
     def _get_booking_lines(
         self,

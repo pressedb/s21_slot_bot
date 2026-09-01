@@ -430,7 +430,7 @@ class TestBookingManager:
         bookings = [
             verifier_booking_factory(
                 booking_id="1",
-                start=now + timedelta(hours=1),
+                start=now + timedelta(minutes=5),
                 student_login="student1",
             ),
             verifier_booking_factory(
@@ -440,11 +440,9 @@ class TestBookingManager:
             ),
         ]
 
-        await booking_manager._notify_on_new_verifier_reviews(
-            bookings,
-            context,
-            logger_mock,
-        )
+        with patch("s21_slot_bot.app.booking_manager.datetime") as datetime_mock:
+            datetime_mock.now.return_value = now
+            await booking_manager._notify_on_new_verifier_reviews(bookings, context, logger_mock)
 
         messenger.send.assert_awaited_once()
         text = messenger.send.await_args.args[1]
@@ -452,6 +450,8 @@ class TestBookingManager:
         assert text.count("🕒") == 2
         assert "student1" in text
         assert "student2" in text
+        assert NotificationKey(id="1", direction=BookingDirection.VERIFIER) in booking_manager._notifications_sent
+        assert NotificationKey(id="2", direction=BookingDirection.VERIFIER) not in booking_manager._notifications_sent
 
     async def test_refresh_bookings(
         self,

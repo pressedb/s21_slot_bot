@@ -21,9 +21,10 @@ from s21_slot_bot.app.utils import get_message_text, get_tzinfo
 from s21_slot_bot.client.consts import MIN_REQUIRED_REVIEWS
 from s21_slot_bot.client.errors import School21Error
 from s21_slot_bot.client.models import ProjectExtended
+from s21_slot_bot.common import markdown
 from s21_slot_bot.common.id import random_id
 from s21_slot_bot.common.logger import get_user_input_logger
-from s21_slot_bot.common.strings import backtick_wrap, ensure_str
+from s21_slot_bot.common.strings import ensure_str
 from s21_slot_bot.common.time import dt_to_pretty, parse_to_datetime
 
 
@@ -255,7 +256,9 @@ class StartFlow(CustomInputFlow):
         self, context: CustomContext, action: FlowAction | None = None, is_markdown: bool = False
     ) -> str:
         project = self._get_project(context)
-        project_name = ensure_str(project, getter=lambda proj: backtick_wrap(proj.name) if is_markdown else proj.name)
+        project_name = ensure_str(
+            project, getter=lambda proj: markdown.backtick_wrap(proj.name) if is_markdown else proj.name
+        )
         currently_booked = ensure_str(project, getter=lambda proj: proj.review_info.booked)
         tz = get_tzinfo(context)
         lines = [

@@ -1,10 +1,12 @@
+import re
+
+from telegram.helpers import escape_markdown
+
+
 # KNOWN LIMITATIONS:
 # - can't handle nested mixed formats (e.g. https://core.telegram.org/bots/api#markdownv2-style)
 # - This_project_name is treated as italics (should be manually escaped)
 # taken from https://ithy.com/article/markdownv2-escaping-python-class-8yyfhi3j
-import re
-
-
 class MarkdownV2Escaper:
     """
     A class to escape text for Telegram MarkdownV2 formatting.
@@ -86,3 +88,14 @@ class MarkdownV2Escaper:
             else:
                 escaped += char
         return escaped
+
+
+def backtick_wrap(text: str) -> str:
+    text = text.replace("`", "")
+    return f"`{text}`"
+
+
+def format_inline_link(text: str, url: str) -> str:
+    escaped_text = escape_markdown(text, version=2)
+    inline = f"[{escaped_text}]({url})"
+    return inline

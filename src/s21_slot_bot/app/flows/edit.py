@@ -21,8 +21,8 @@ from s21_slot_bot.app.models import (
 from s21_slot_bot.app.utils import get_message_text, get_tzinfo
 from s21_slot_bot.client.consts import MIN_REQUIRED_REVIEWS
 from s21_slot_bot.client.models import ProjectExtended
+from s21_slot_bot.common import markdown
 from s21_slot_bot.common.logger import LoggerLike, get_user_input_logger
-from s21_slot_bot.common.strings import backtick_wrap
 from s21_slot_bot.common.time import dt_to_pretty, parse_to_datetime
 
 
@@ -69,7 +69,7 @@ class EditFlow(CustomInputFlow):
         bot_id = context.ensured_chat_data.edit_bot_id
         inst = self._bot_manager.get_bot(bot_id)
         c = inst.cfg
-        project_name = backtick_wrap(c.project_name) if is_markdown else c.project_name
+        project_name = markdown.backtick_wrap(c.project_name) if is_markdown else c.project_name
         tz = get_tzinfo(context)
         from_pretty = dt_to_pretty(c.from_dt, tz=tz)
         to_pretty = dt_to_pretty(c.to_dt, tz=tz)
