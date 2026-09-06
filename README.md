@@ -231,13 +231,6 @@ TIMEZONE=Europe/Moscow
 
 Один и тот же способ подходит для запуска как на своем компьютере, так и на VPS.
 
-#### 1. Получите проект
-
-```bash
-git clone https://github.com/pressedb/s21_slot_bot.git
-cd s21_slot_bot
-```
-
 <details>
 
 <summary><strong>🌐 Запуск на VPS</strong></summary>
@@ -266,14 +259,14 @@ exit
 ssh slotbot@<VPS_HOST>
 ```
 
-После этого клонируйте проект:
+</details>
+
+#### 1. Получите проект
 
 ```bash
-git clone https://github.com/pressedb/s21_slot_bot.git ~/s21_slot_bot
-cd ~/s21_slot_bot
+git clone https://github.com/pressedb/s21_slot_bot.git
+cd s21_slot_bot
 ```
-
-</details>
 
 #### 2. Создайте `.env`
 
@@ -335,14 +328,6 @@ restart: unless-stopped
 
 ```bash
 cd s21_slot_bot
-git pull
-docker compose up -d --build
-```
-
-Если на VPS проект был клонирован в `~/s21_slot_bot`:
-
-```bash
-cd ~/s21_slot_bot
 git pull
 docker compose up -d --build
 ```
