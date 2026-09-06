@@ -105,7 +105,7 @@ class TestStartFlow:
         bot_manager.check_bot_limits = MagicMock()
         s21_client.get_user_and_student_id = AsyncMock(return_value=("u", "s"))
         s21_client.get_reviewed_projects = AsyncMock(return_value=[project])
-        with pytest.raises(InternalError):
+        with pytest.raises(MenuError):
             await start_flow.list_projects(update_mock, context)
 
     async def test_list_projects_wraps_school21_error(

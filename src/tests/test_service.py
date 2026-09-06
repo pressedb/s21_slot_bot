@@ -46,7 +46,9 @@ class TestSlotBotService:
         s21_client.start = AsyncMock()
         booking_manager.initialize_verifier_bookings = AsyncMock()
         booking_manager.start_refreshing = AsyncMock()
+
         await service._post_init(tg_app_mock)
+
         s21_client.start.assert_awaited_once()
         booking_manager.initialize_verifier_bookings.assert_awaited_once()
         booking_manager.start_refreshing.assert_awaited_once()
@@ -63,6 +65,8 @@ class TestSlotBotService:
         messenger.safe_delete = AsyncMock()
         chat_id = config.bot.tg_chat_id.get_secret_value()
         tg_app_mock.chat_data = {chat_id: ChatData(menu_msg_id=10, menu_error_msg_id=11)}
+
         await service._post_stop(tg_app_mock)
+
         assert [c.args[0] for c in messenger.safe_delete.await_args_list] == [11, 10]
         s21_client.stop.assert_awaited_once()

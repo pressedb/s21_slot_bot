@@ -1,4 +1,3 @@
-import asyncio
 from collections.abc import Callable, Coroutine
 from datetime import datetime
 from typing import Any, cast, override
@@ -51,29 +50,6 @@ class StartFlow(CustomInputFlow):
     @property
     def _ordered_actions(self) -> list[FlowAction]:
         return list(self._action_to_method.keys())
-
-    @override
-    def _get_project(self, context: CustomContext) -> ProjectExtended:
-        start_project_id = context.ensured_chat_data.start_project_id
-        if not start_project_id or not (project := context.ensured_chat_data.projects_map.get(start_project_id)):
-            raise InternalError("проект не найден")
-        return project
-
-    @override
-    def _get_prev_action(self, action: FlowAction, context: CustomContext) -> FlowAction | None:
-        match action:
-            case InputFlowAction.PICK_MODE if len(context.ensured_chat_data.projects_map) == 1:
-                return None
-            case InputFlowAction.PICK_FROM if context.ensured_chat_data.start_mode == Mode.ONLY_FIND:
-                return InputFlowAction.PICK_MODE
-            case _:
-                cur_idx = self._get_action_idx(action)
-                prev_action = self._ordered_actions[cur_idx - 1] if 1 <= cur_idx < len(self._ordered_actions) else None
-                return prev_action
-
-    def _get_action_idx(self, action: FlowAction) -> int:
-        idx = self._ordered_actions.index(action)
-        return idx
 
     @override
     async def parse_callback(self, callback_data: list[str], query: CallbackQuery, context: CustomContext) -> None:
@@ -132,36 +108,18 @@ class StartFlow(CustomInputFlow):
         action = StartFlowAction.PICK_PROJECT
         self._set_screen(action, context)
         try:
-            user_id, student_id = await self._s21_client.get_user_and_student_id(logger)
-            projects = await self._s21_client.get_reviewed_projects(user_id, logger)
-            if not projects:
+            projects_extended = await self._s21_client.get_all_reviewed_projects_with_review_info(logger)
+            if not projects_extended:
                 await self._messenger.render_menu_message(context, "📭 нет активных проектов на проверке", logger)
                 return
-            projects_extended: list[ProjectExtended] = []
-            review_info_per_project = await asyncio.gather(
-                *[
-                    self._s21_client.get_review_info(project.id, student_id, logger)
-                    for project in projects
-                    if project.id
-                ]
-            )
-            if len(review_info_per_project) != len(projects):
-                raise InternalError("не удалось получить информацию о проверках для проектов")
-            for project, review_info in zip(projects, review_info_per_project):
-                projects_extended.append(
-                    ProjectExtended.model_validate({**project.model_dump(), "review_info": review_info})
-                )
         except School21Error as e:
             raise MenuError(f"не удалось получить проекты: {e.message}") from e
-
         context.ensured_chat_data.projects_map = {project.id: project for project in projects_extended}
-
         if len(projects_extended) == 1:
             project = projects_extended[0]
             context.ensured_chat_data.start_project_id = project.id
             await self.pick_mode(user_input, context)
             return
-
         kb = InlineKeyboardMarkup(
             [
                 [
@@ -206,7 +164,6 @@ class StartFlow(CustomInputFlow):
         logger.info("Confirming the chosen bot search parameters...")
         action = StartFlowAction.CONFIRM
         self._set_screen(action, context)
-
         kb = InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("🚀 старт", callback_data=f"{self._category}:{action}")],
@@ -250,6 +207,29 @@ class StartFlow(CustomInputFlow):
         text += f"✅ Запускаю бота #{bot_id}"
         await self._messenger.render_menu_message(context, text, logger, parse_mode=ParseMode.MARKDOWN_V2)
         await self._bot_manager.start_bot(inst, context, logger)
+
+    @override
+    def _get_project(self, context: CustomContext) -> ProjectExtended:
+        start_project_id = context.ensured_chat_data.start_project_id
+        if not start_project_id or not (project := context.ensured_chat_data.projects_map.get(start_project_id)):
+            raise InternalError("проект не найден")
+        return project
+
+    @override
+    def _get_prev_action(self, action: FlowAction, context: CustomContext) -> FlowAction | None:
+        match action:
+            case InputFlowAction.PICK_MODE if len(context.ensured_chat_data.projects_map) == 1:
+                return None
+            case InputFlowAction.PICK_FROM if context.ensured_chat_data.start_mode == Mode.ONLY_FIND:
+                return InputFlowAction.PICK_MODE
+            case _:
+                cur_idx = self._get_action_idx(action)
+                prev_action = self._ordered_actions[cur_idx - 1] if 1 <= cur_idx < len(self._ordered_actions) else None
+                return prev_action
+
+    def _get_action_idx(self, action: FlowAction) -> int:
+        idx = self._ordered_actions.index(action)
+        return idx
 
     @override
     def _get_chosen_project_info_text(

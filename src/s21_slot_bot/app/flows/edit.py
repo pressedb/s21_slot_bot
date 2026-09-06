@@ -46,44 +46,6 @@ class EditFlow(CustomInputFlow):
         }
 
     @override
-    def _get_project(self, context: CustomContext) -> ProjectExtended:
-        bot_id = context.ensured_chat_data.edit_bot_id
-        if not bot_id:
-            raise InternalError("бот не существует")
-        inst = self._bot_manager.get_bot(bot_id)
-        project = context.ensured_chat_data.projects_map[inst.cfg.project_id]
-        return project
-
-    @override
-    def _get_prev_action(self, action: FlowAction, context: CustomContext) -> FlowAction | None:
-        match action:
-            case EditFlowAction.SHOW_MENU:
-                return EditFlowAction.LIST_BOTS
-            case _:
-                return EditFlowAction.SHOW_MENU
-
-    @override
-    def _get_chosen_project_info_text(
-        self, context: CustomContext, action: FlowAction | None = None, is_markdown: bool = False
-    ) -> str:
-        bot_id = context.ensured_chat_data.edit_bot_id
-        inst = self._bot_manager.get_bot(bot_id)
-        c = inst.cfg
-        project_name = markdown.backtick_wrap(c.project_name) if is_markdown else c.project_name
-        tz = get_tzinfo(context)
-        from_pretty = dt_to_pretty(c.from_dt, tz=tz)
-        to_pretty = dt_to_pretty(c.to_dt, tz=tz)
-        text = (
-            f"✏️ бот #{c.bot_id} ({project_name})\n"
-            f"окно: {from_pretty} → {to_pretty}\n"
-            f"интервал: {c.interval_sec} секунд\n"
-            f"режим: {' '.join(c.mode.to_emoji_text())}\n"
-            f"количество проверок: {c.required_reviews}\n"
-            f"статус: {' '.join(inst.state.to_emoji_text())}\n\n"
-        )
-        return text
-
-    @override
     async def parse_callback(self, callback_data: list[str], query: CallbackQuery, context: CustomContext) -> None:
         logger = get_user_input_logger(query)
         action = callback_data.pop()
@@ -215,39 +177,11 @@ class EditFlow(CustomInputFlow):
         text = self._get_chosen_project_info_text(context, is_markdown=True) + update_text
         await self._messenger.render_menu_message(context, text, logger, kb=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
-    def _set_from(self, text: str, context: CustomContext, logger: LoggerLike) -> None:
-        logger.info("Editing custom search start time...")
-        tz = get_tzinfo(context)
-        now = datetime.now(tz=tz)
-        bot_id = context.ensured_chat_data.edit_bot_id
-        inst = self._bot_manager.get_bot(bot_id)
-        from_dt = parse_to_datetime(text, tz, now, logger)
-        if from_dt >= inst.cfg.to_dt:
-            raise InvalidUserInputError(
-                f"начальное время должно быть раньше конечного ({dt_to_pretty(inst.cfg.to_dt, tz=tz)})"
-            )
-        inst.cfg.from_dt = from_dt
-
     async def edit_custom_from(self, update: Update, context: CustomContext) -> None:
         logger = get_user_input_logger(update)
         text = get_message_text(update)
         self._set_from(text, context, logger)
         await self.edit_menu(update, context, update_text="✅ начальное время обновлено")
-
-    def _set_to(self, text: str, context: CustomContext, logger: LoggerLike) -> None:
-        logger.info("Editing custom search start time...")
-        bot_id = context.ensured_chat_data.edit_bot_id
-        inst = self._bot_manager.get_bot(bot_id)
-        tz = get_tzinfo(context)
-        from_dt = inst.cfg.from_dt
-        if not from_dt:
-            raise InternalError("начальное время поиска не задано", location=context.ensured_chat_data.model_dump())
-        to_dt = parse_to_datetime(text, tz, from_dt, logger)
-        if to_dt <= inst.cfg.from_dt:
-            raise InvalidUserInputError(
-                f"конечное время должно быть позже начального ({dt_to_pretty(inst.cfg.from_dt, tz=tz)})"
-            )
-        inst.cfg.to_dt = to_dt
 
     async def edit_custom_to(self, update: Update, context: CustomContext) -> None:
         logger = get_user_input_logger(update)
@@ -315,3 +249,69 @@ class EditFlow(CustomInputFlow):
             raise InvalidUserInputError(f"бот #{bot_id} уже активен", help_text="выбери другого бота")
         await self._bot_manager.start_bot(inst, context, logger)
         await self.edit_menu(query, context, update_text=f"🔄 бот #{bot_id} перезапущен")
+
+    def _set_from(self, text: str, context: CustomContext, logger: LoggerLike) -> None:
+        logger.info("Editing custom search start time...")
+        tz = get_tzinfo(context)
+        now = datetime.now(tz=tz)
+        bot_id = context.ensured_chat_data.edit_bot_id
+        inst = self._bot_manager.get_bot(bot_id)
+        from_dt = parse_to_datetime(text, tz, now, logger)
+        if from_dt >= inst.cfg.to_dt:
+            raise InvalidUserInputError(
+                f"начальное время должно быть раньше конечного ({dt_to_pretty(inst.cfg.to_dt, tz=tz)})"
+            )
+        inst.cfg.from_dt = from_dt
+
+    def _set_to(self, text: str, context: CustomContext, logger: LoggerLike) -> None:
+        logger.info("Editing custom search start time...")
+        bot_id = context.ensured_chat_data.edit_bot_id
+        inst = self._bot_manager.get_bot(bot_id)
+        tz = get_tzinfo(context)
+        from_dt = inst.cfg.from_dt
+        if not from_dt:
+            raise InternalError("начальное время поиска не задано", location=context.ensured_chat_data.model_dump())
+        to_dt = parse_to_datetime(text, tz, from_dt, logger)
+        if to_dt <= inst.cfg.from_dt:
+            raise InvalidUserInputError(
+                f"конечное время должно быть позже начального ({dt_to_pretty(inst.cfg.from_dt, tz=tz)})"
+            )
+        inst.cfg.to_dt = to_dt
+
+    @override
+    def _get_project(self, context: CustomContext) -> ProjectExtended:
+        bot_id = context.ensured_chat_data.edit_bot_id
+        if not bot_id:
+            raise InternalError("бот не существует")
+        inst = self._bot_manager.get_bot(bot_id)
+        project = context.ensured_chat_data.projects_map[inst.cfg.project_id]
+        return project
+
+    @override
+    def _get_prev_action(self, action: FlowAction, context: CustomContext) -> FlowAction | None:
+        match action:
+            case EditFlowAction.SHOW_MENU:
+                return EditFlowAction.LIST_BOTS
+            case _:
+                return EditFlowAction.SHOW_MENU
+
+    @override
+    def _get_chosen_project_info_text(
+        self, context: CustomContext, action: FlowAction | None = None, is_markdown: bool = False
+    ) -> str:
+        bot_id = context.ensured_chat_data.edit_bot_id
+        inst = self._bot_manager.get_bot(bot_id)
+        c = inst.cfg
+        project_name = markdown.backtick_wrap(c.project_name) if is_markdown else c.project_name
+        tz = get_tzinfo(context)
+        from_pretty = dt_to_pretty(c.from_dt, tz=tz)
+        to_pretty = dt_to_pretty(c.to_dt, tz=tz)
+        text = (
+            f"✏️ бот #{c.bot_id} ({project_name})\n"
+            f"окно: {from_pretty} → {to_pretty}\n"
+            f"интервал: {c.interval_sec} секунд\n"
+            f"режим: {' '.join(c.mode.to_emoji_text())}\n"
+            f"количество проверок: {c.required_reviews}\n"
+            f"статус: {' '.join(inst.state.to_emoji_text())}\n\n"
+        )
+        return text

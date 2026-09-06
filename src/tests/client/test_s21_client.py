@@ -183,7 +183,7 @@ class TestSchool21Client:
         info = await s21_client.get_slots_info("task-1", now, end, logger_mock)
         assert info.review_info.booked == 1
 
-    async def test_get_bookings(
+    async def test_get_reviewee_bookings(
         self,
         s21_client: School21Client,
         logger_mock: LoggerLike,
@@ -204,8 +204,42 @@ class TestSchool21Client:
                 }
             }
         )
-        bookings = await s21_client.get_reviewee_bookings(now, end, logger_mock)
-        assert bookings["booking-1"].project_id == "project-1"
+        reviewee_bookings = await s21_client.get_reviewee_bookings(now, end, logger_mock)
+        assert reviewee_bookings["booking-1"].project_id == "project-1"
+
+    async def test_get_verifier_bookings(
+        self,
+        s21_client: School21Client,
+        logger_mock: LoggerLike,
+        now: datetime,
+    ) -> None:
+        end = now + timedelta(hours=1)
+        s21_client._graphql = AsyncMock(
+            return_value={
+                "calendarEventS21": {
+                    "getMyCalendarEvents": [
+                        {
+                            "id": "review_slot-1",
+                            "eventCode": "student_check",
+                            "bookings": [
+                                {
+                                    "id": "booking-1",
+                                    "answerId": "answer-1",
+                                    "task": {"goalId": "project-1", "goalName": "Project 1"},
+                                    "eventSlot": {"start": now.isoformat(), "end": end},
+                                }
+                            ],
+                        },
+                        {
+                            "id": "something else",
+                            "eventCode": "not_student_check",
+                        },
+                    ]
+                }
+            }
+        )
+        verifier_bookings = await s21_client.get_verifier_bookings(now, end, logger_mock)
+        assert verifier_bookings["booking-1"].project_id == "project-1"
 
     async def test_book_disables_retry_middleware(
         self,
@@ -248,6 +282,8 @@ class TestSchool21Client:
             await s21_client.get_slots_info("task", now, now + timedelta(hours=1), logger_mock)
         with pytest.raises(School21ParsingError):
             await s21_client.get_reviewee_bookings(now, now + timedelta(hours=1), logger_mock)
+        with pytest.raises(School21ParsingError):
+            await s21_client.get_verifier_bookings(now, now + timedelta(hours=1), logger_mock)
         with pytest.raises(School21ParsingError):
             await s21_client.book("answer", now, logger_mock)
 

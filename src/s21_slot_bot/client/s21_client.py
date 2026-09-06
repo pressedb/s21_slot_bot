@@ -34,6 +34,7 @@ from s21_slot_bot.client.models import (
     ContentType,
     OperationName,
     Project,
+    ProjectExtended,
     ProjectStatus,
     RevieweeBooking,
     ReviewInfo,
@@ -107,6 +108,24 @@ class School21Client:
             return user_id, student_id
         except Exception as e:
             self._raise_parsing_error(operation_name, e, data)
+
+    async def get_all_reviewed_projects_with_review_info(self, logger: LoggerLike) -> list[ProjectExtended]:
+        user_id, student_id = await self.get_user_and_student_id(logger)
+        projects = await self.get_reviewed_projects(user_id, logger)
+        if not projects:
+            logger.info("No active projects in review")
+            return []
+        projects_extended: list[ProjectExtended] = []
+        review_info_per_project = await asyncio.gather(
+            *[self.get_review_info(project.id, student_id, logger) for project in projects if project.id]
+        )
+        if len(review_info_per_project) != len(projects):
+            raise School21Error("не удалось получить информацию о проверках для проектов")
+        for project, review_info in zip(projects, review_info_per_project):
+            projects_extended.append(
+                ProjectExtended.model_validate({**project.model_dump(), "review_info": review_info})
+            )
+        return projects_extended
 
     @cashews.cache(ttl=_cache_ttl, key="get_reviewed_projects:{user_id}")
     async def get_reviewed_projects(self, user_id: str, logger: LoggerLike) -> list[Project]:
