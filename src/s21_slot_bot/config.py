@@ -1,14 +1,14 @@
 from zoneinfo import ZoneInfo
 
 from pydantic import Field, SecretStr
-from pydantic_settings import BaseSettings
 
 from s21_slot_bot.app.config import BotConfig
 from s21_slot_bot.client.config import S21ClientConfig
+from s21_slot_bot.common.settings import BaseSettingsWithSecrets
 from s21_slot_bot.logging_config import LogConfig
 
 
-class SlotBotServiceConfig(BaseSettings):
+class SlotBotServiceConfig(BaseSettingsWithSecrets):
     s21: S21ClientConfig = Field(default_factory=S21ClientConfig)
     bot: BotConfig = Field(default_factory=BotConfig)
     log: LogConfig = Field(default_factory=LogConfig)

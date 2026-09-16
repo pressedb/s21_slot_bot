@@ -1,10 +1,13 @@
 from pydantic import Field, NonNegativeInt, PositiveInt, SecretStr
-from pydantic_settings import BaseSettings
+
+from s21_slot_bot.client.models import Campus
+from s21_slot_bot.common.settings import BaseSettingsWithSecrets
 
 
-class S21ClientConfig(BaseSettings):
+class S21ClientConfig(BaseSettingsWithSecrets):
     username: str = Field(alias="S21_USERNAME")
     password: SecretStr = Field(alias="S21_PASSWORD")
+    campus: Campus = Field(alias="S21_CAMPUS")
     timeout_total_sec: NonNegativeInt = Field(alias="S21_TIMEOUT_TOTAL_SEC", default=90)
     timeout_connect_sec: NonNegativeInt = Field(alias="S21_TIMEOUT_CONNECT_SEC", default=10)
     timeout_read_sec: NonNegativeInt = Field(alias="S21_TIMEOUT_READ_SEC", default=20)

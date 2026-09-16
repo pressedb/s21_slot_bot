@@ -139,8 +139,13 @@ https://github.com/user-attachments/assets/8f3e79d9-918a-49ad-ab48-240bd4568c5b
 
 ### 2. Узнайте свой Telegram user ID
 
-Нужен числовой ID вашего Telegram-пользователя.
-Чтобы узнать его, напишите сообщение из своего аккаунта в ваш бот от **@BotFather** и запросите информацию
+Далее необходимо узнать числовой ID вашего Telegram-пользователя. Приложение проверяет пользователя и приватный чат,
+поэтому управлять вашим экземпляром бота сможет только указанный
+аккаунт.
+<details>
+
+<summary><strong>Через Telegram API</strong></summary>
+Чтобы узнать свой ID через API, напишите сообщение из своего аккаунта в ваш бот от **@BotFather** и запросите информацию
 о полученных сообщениях через `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`, придет ответ следующего
 формата:
 
@@ -171,11 +176,19 @@ https://github.com/user-attachments/assets/8f3e79d9-918a-49ad-ab48-240bd4568c5b
 
 </details>
 
-
 Укажите полученный `result.message.chat.id` в переменной `TG_CHAT_ID`.
 
-Приложение проверяет пользователя и приватный чат, поэтому управлять вашим экземпляром бота сможет только указанный
-аккаунт.
+</details>
+
+<details>
+
+<summary><strong>Через стороннего бота</strong></summary>
+
+Альтернативный способ - отправить сообщение в одного из ботов, который возвращает информацию о пользователе -
+например, [@getmyid_bot](https://t.me/Getmyid_bot). Из ответа необходимо скопировать `Your ID` в переменную
+`TG_CHAT_ID`.
+
+</details>
 
 ## Конфигурация
 
@@ -184,6 +197,7 @@ https://github.com/user-attachments/assets/8f3e79d9-918a-49ad-ab48-240bd4568c5b
 ```dotenv
 S21_USERNAME=your_school21_login
 S21_PASSWORD=your_school21_password
+S21_CAMPUS=Moscow
 
 TG_BOT_TOKEN=your_telegram_bot_token
 TG_CHAT_ID=123456789
@@ -199,8 +213,16 @@ TIMEZONE=Europe/Moscow
 |----------------|----------------------|
 | `S21_USERNAME` | Логин Школы 21       |
 | `S21_PASSWORD` | Пароль Школы 21      |
+| `S21_CAMPUS`   | Кампус Школы 21      |
 | `TG_BOT_TOKEN` | Токен Telegram-бота  |
 | `TG_CHAT_ID`   | Ваш Telegram user ID |
+
+Параметр `S21_CAMPUS` определяет, какое значение будет у параметра `x-edu-org-unit-id` в заголовках запроса.
+
+Доступные на текущий момент кампусы (чтобы добавить свой кампус, создайте feature request):
+
+* `Moscow`
+* `Ufa`
 
 ### Дополнительные параметры
 
@@ -278,6 +300,7 @@ cd s21_slot_bot
 ```dotenv
 S21_USERNAME=your_school21_login
 S21_PASSWORD=your_school21_password
+S21_CAMPUS=Moscow
 TG_BOT_TOKEN=your_telegram_bot_token
 TG_CHAT_ID=123456789
 TIMEZONE=Europe/Moscow
@@ -614,6 +637,10 @@ refresh-токены и использует их для последующих 
 
 Если учетные данные верны, проблема может быть временной на стороне платформы или страницы авторизации. Посмотрите логи
 приложения.
+
+### Ошибка "У вас нет прав на выполнение данной операции"
+
+Вероятно, ваш кампус указан неверно, проверьте `S21_CAMPUS`.
 
 ### Поиск завершился с ошибкой
 

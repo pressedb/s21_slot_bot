@@ -17,7 +17,6 @@ from s21_slot_bot.client.consts import (
     GRAPHQL_URL,
     PLATFORM_URL,
     USER_ROLE,
-    X_EDU_ORG_UNIT_ID,
     X_EDU_PRODUCT_ID,
 )
 from s21_slot_bot.client.errors import (
@@ -62,6 +61,7 @@ class School21Client:
             sock_connect=config.timeout_connect_sec,
             sock_read=config.timeout_read_sec,
         )
+        self._campus = config.campus
         self._auth_middleware = auth_middleware
         self._retry_middleware = retry_middleware
         self._cache_ttl_sec = config.cache_ttl_sec
@@ -293,8 +293,8 @@ class School21Client:
             "Content-Type": ContentType.APPLICATION_JSON,
             "Accept": ContentType.APPLICATION_JSON,
             "userrole": USER_ROLE,
-            "schoolid": X_EDU_ORG_UNIT_ID,
-            "x-edu-org-unit-id": X_EDU_ORG_UNIT_ID,
+            "schoolid": self._campus.id,
+            "x-edu-org-unit-id": self._campus.id,
             "x-edu-product-id": X_EDU_PRODUCT_ID,
             "Origin": PLATFORM_URL,
             "Referer": f"{PLATFORM_URL}/calendar",

@@ -1,10 +1,10 @@
 from pydantic import Field, Secret
-from pydantic_settings import BaseSettings
 
 from s21_slot_bot.app.models import IntervalSec, NumBots
+from s21_slot_bot.common.settings import BaseSettingsWithSecrets
 
 
-class BotConfig(BaseSettings):
+class BotConfig(BaseSettingsWithSecrets):
     tg_chat_id: Secret[int] = Field(
         alias="TG_CHAT_ID",
         description="Chat ID used for user authentication and sending messages to",

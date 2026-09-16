@@ -211,6 +211,7 @@ def config(monkeypatch: MonkeyPatch) -> SlotBotServiceConfig:
     env = {
         "S21_USERNAME": "user1",
         "S21_PASSWORD": "password1",
+        "S21_CAMPUS": "Moscow",
         "TG_BOT_TOKEN": "123456:TEST_TOKEN",
         "TG_CHAT_ID": "12345",
         "MAX_BOTS": "3",

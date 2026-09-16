@@ -2,12 +2,13 @@ import logging.config
 from typing import Any
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
 
 from s21_slot_bot.common.logger import LogLevel
+from s21_slot_bot.common.settings import BaseSettingsWithSecrets
 
 
-class LogConfig(BaseSettings):
+class LogConfig(BaseSettingsWithSecrets):
     model_config = SettingsConfigDict(enable_decoding=False)
 
     level: LogLevel = Field(alias="LOG_LEVEL", description="Logging level", default=LogLevel.INFO)
