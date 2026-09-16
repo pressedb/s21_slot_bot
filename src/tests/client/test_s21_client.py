@@ -318,6 +318,7 @@ class TestSchool21Client:
         response_mock = response_factory(json={"data": {"user": {"id": "x"}}})
         session_mock.post.return_value = response_context(response_mock)
         s21_client._session_internal = session_mock
+        s21_client._campus_id = "cid"
         assert await s21_client._graphql(OperationName.GET_USER, {}, logger_mock) == {"user": {"id": "x"}}
 
     async def test_graphql_raises_typed_error(
@@ -332,6 +333,7 @@ class TestSchool21Client:
         )
         session_mock.post.return_value = response_context(response_mock)
         s21_client._session_internal = session_mock
+        s21_client._campus_id = "cid"
         with pytest.raises(School21SlotNotFoundError):
             await s21_client._graphql(OperationName.GET_SLOTS, {}, logger_mock)
 
@@ -345,6 +347,36 @@ class TestSchool21Client:
         response_mock = response_factory(status=HTTPStatus.BAD_GATEWAY, reason="Bad Gateway", text="upstream")
         session_mock.post.return_value = response_context(response_mock)
         s21_client._session_internal = session_mock
+        s21_client._campus_id = "cid"
         with pytest.raises(School21Error) as exc_info:
             await s21_client._graphql(OperationName.GET_USER, {}, logger_mock)
         assert exc_info.value.effective_status == HTTPStatus.BAD_GATEWAY
+
+    async def test_get_campus_id(
+        self,
+        s21_client: School21Client,
+        logger_mock: LoggerLike,
+        session_mock: aiohttp.ClientSession,
+        response_factory: Callable[..., aiohttp.ClientResponse],
+    ) -> None:
+        campus_id = "ff19a3a7-12f5-4332-9582-624519c3eaea"
+        response_mock = response_factory(
+            json={
+                "login": "bibikov-lukyan",
+                "className": "ADONIS",
+                "parallelName": "Core program",
+                "expValue": 100,
+                "level": 0,
+                "expToNextLevel": 399,
+                "campus": {"id": campus_id, "shortName": "Hogwarts"},
+                "status": "Active",
+            }
+        )
+        session_mock.get.return_value = response_context(response_mock)
+        s21_client._session_internal = session_mock
+
+        actual_campus_id = await s21_client._get_campus_id(logger_mock)
+        _ = await s21_client._get_campus_id(logger_mock)
+
+        assert campus_id == actual_campus_id == s21_client._campus_id
+        session_mock.get.assert_called_once()

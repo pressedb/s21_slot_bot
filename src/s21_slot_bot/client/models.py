@@ -37,19 +37,6 @@ class Tokens(BaseModel):
     expires_at_epoch: float
 
 
-class Campus(StrEnum):
-    MOSCOW = "Moscow"
-    UFA = "Ufa"
-
-    @property
-    def id(self) -> str:
-        match self:
-            case Campus.MOSCOW:
-                return "6bfe3c56-0211-4fe1-9e59-51616caac4dd"
-            case Campus.UFA:
-                return "e786cbfb-ed04-4e0e-8a01-6b0fa2256634"
-
-
 class OperationName(StrEnum):
     BOOK = "calendarAddBookingToEventSlot"
     GET_USER = "getCurrentUser"

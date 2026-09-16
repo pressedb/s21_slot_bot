@@ -16,6 +16,7 @@ from s21_slot_bot.client.consts import (
     GRAPHQL_QUERIES_MODULE,
     GRAPHQL_URL,
     PLATFORM_URL,
+    PUBLIC_API_URL,
     USER_ROLE,
     X_EDU_PRODUCT_ID,
 )
@@ -61,11 +62,12 @@ class School21Client:
             sock_connect=config.timeout_connect_sec,
             sock_read=config.timeout_read_sec,
         )
-        self._campus = config.campus
+        self._username = config.username
         self._auth_middleware = auth_middleware
         self._retry_middleware = retry_middleware
         self._cache_ttl_sec = config.cache_ttl_sec
         self._session_internal: aiohttp.ClientSession | None = None
+        self._campus_id: str | None = None
         self._user_id: str | None = None
         self._student_id: str | None = None
 
@@ -289,12 +291,13 @@ class School21Client:
         overridden_middleware: tuple[School21Middleware] | None = None,
     ) -> dict[str, Any]:
         logger.info("Calling `%s` with variables `%s`", operation_name, variables)
+        campus_id = await self._get_campus_id(logger)
         headers = {
             "Content-Type": ContentType.APPLICATION_JSON,
             "Accept": ContentType.APPLICATION_JSON,
             "userrole": USER_ROLE,
-            "schoolid": self._campus.id,
-            "x-edu-org-unit-id": self._campus.id,
+            "schoolid": campus_id,
+            "x-edu-org-unit-id": campus_id,
             "x-edu-product-id": X_EDU_PRODUCT_ID,
             "Origin": PLATFORM_URL,
             "Referer": f"{PLATFORM_URL}/calendar",
@@ -337,6 +340,20 @@ class School21Client:
                 )
             data: dict[str, Any] = resp_body.get("data", {})
             return data
+
+    async def _get_campus_id(self, logger: LoggerLike) -> str:
+        if self._campus_id:
+            return self._campus_id
+        logger.info("Getting campus id")
+        async with self._session.get(url=f"{PUBLIC_API_URL}/v1/participants/{self._username}") as resp:
+            resp_body: dict[str, Any] = await resp.json()
+            logger.debug(
+                "Received user information: %s",
+                json.dumps(resp_body, indent=2, ensure_ascii=False),
+            )
+            campus_id: str = resp_body["campus"]["id"]
+            self._campus_id = campus_id
+            return campus_id
 
     def _raise_error_from_response(
         self, operation_name: str, variables: dict[str, Any], errors: list[dict[str, Any]]
