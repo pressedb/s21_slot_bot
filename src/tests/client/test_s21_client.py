@@ -380,3 +380,31 @@ class TestSchool21Client:
 
         assert campus_id == actual_campus_id == s21_client._campus_id
         session_mock.get.assert_called_once()
+
+    async def test_get_campus_id_internal_error(
+        self,
+        s21_client: School21Client,
+        logger_mock: LoggerLike,
+        session_mock: aiohttp.ClientSession,
+        response_factory: Callable[..., aiohttp.ClientResponse],
+    ) -> None:
+        response_mock = response_factory(status=HTTPStatus.INTERNAL_SERVER_ERROR, text="something went wrong")
+        session_mock.get.return_value = response_context(response_mock)
+        s21_client._session_internal = session_mock
+
+        with pytest.raises(School21Error):
+            await s21_client._get_campus_id(logger_mock)
+
+    async def test_get_campus_id_parsing_error(
+        self,
+        s21_client: School21Client,
+        logger_mock: LoggerLike,
+        session_mock: aiohttp.ClientSession,
+        response_factory: Callable[..., aiohttp.ClientResponse],
+    ) -> None:
+        response_mock = response_factory(json={"totally": "different response"})
+        session_mock.get.return_value = response_context(response_mock)
+        s21_client._session_internal = session_mock
+
+        with pytest.raises(School21ParsingError):
+            await s21_client._get_campus_id(logger_mock)

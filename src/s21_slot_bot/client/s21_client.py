@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from http import HTTPStatus
 from importlib.resources import files
-from typing import Any, NoReturn
+from typing import Any, Literal, NoReturn
 
 import aiohttp
 import cashews
@@ -344,14 +344,25 @@ class School21Client:
     async def _get_campus_id(self, logger: LoggerLike) -> str:
         if self._campus_id:
             return self._campus_id
+
         logger.info("Getting campus id")
         async with self._session.get(url=f"{PUBLIC_API_URL}/v1/participants/{self._username}") as resp:
+            if not resp.ok:
+                text = await resp.text()
+                raise School21Error(
+                    "не удалось получить информацию о кампусе",
+                    status=HTTPStatus(resp.status),
+                    location={"response": text},
+                )
             resp_body: dict[str, Any] = await resp.json()
             logger.debug(
                 "Received user information: %s",
                 json.dumps(resp_body, indent=2, ensure_ascii=False),
             )
-            campus_id: str = resp_body["campus"]["id"]
+            try:
+                campus_id: str = resp_body["campus"]["id"]
+            except Exception as e:
+                self._raise_parsing_error("get_campus_id", e, resp_body)
             self._campus_id = campus_id
             return campus_id
 
@@ -368,7 +379,9 @@ class School21Client:
                     raise School21SlotNotFoundError("слот не найден", location=location)
         raise School21Error("ошибка запроса к Школе 21", location=location)
 
-    def _raise_parsing_error(self, operation_name: str, error: Exception, data: dict[str, Any]) -> NoReturn:
+    def _raise_parsing_error(
+        self, operation_name: OperationName | Literal["get_campus_id"], error: Exception, data: dict[str, Any]
+    ) -> NoReturn:
         raise School21ParsingError(
             f"не удалось обработать ответ от операции {operation_name}, ошибка: `{error}`", location=data
         ) from error
