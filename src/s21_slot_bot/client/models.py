@@ -56,6 +56,7 @@ class ProjectStatus(StrEnum):
     IN_PROGRESS = "IN_PROGRESS"
     P2P_EVALUATIONS = "P2P_EVALUATIONS"
     COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 
 class S21Model(BaseModel):
