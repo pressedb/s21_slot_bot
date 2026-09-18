@@ -110,6 +110,7 @@ class NotificationKey(BaseModel):
     direction: BookingDirection
 
 
+# TODO: add checklist_id (https://platform.21-school.ru/checklist/{id})
 class BookingBase(S21Model):
     id: str = Field(description="Booking ID, taken from S21 or generated for dry-runs")
     start: AwareDatetime = Field(

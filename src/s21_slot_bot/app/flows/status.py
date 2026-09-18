@@ -11,7 +11,7 @@ from s21_slot_bot.app.consts import STATUS_LINE_INDENT
 from s21_slot_bot.app.errors import BookingRefresherError, InvalidCallbackDataError
 from s21_slot_bot.app.flows.actions import StatusFlowAction
 from s21_slot_bot.app.flows.base import Flow
-from s21_slot_bot.app.models import BotInstance, CustomContext, Lifecycle
+from s21_slot_bot.app.models import BotInstance, CustomContext, Lifecycle, Mode
 from s21_slot_bot.app.utils import get_tzinfo
 from s21_slot_bot.client.models import DryRevieweeBooking, RevieweeBooking, VerifierBooking
 from s21_slot_bot.common import markdown
@@ -123,14 +123,22 @@ class StatusFlow(Flow):
         from_pretty = dt_to_pretty(c.from_dt, tz=tz)
         to_pretty = dt_to_pretty(c.to_dt, tz=tz)
         state_emoji, state_text = inst.state.to_emoji_text()
-        bot_lines = [
-            f"{state_emoji} #{c.bot_id} [{state_text}]",
-            f"проверок: {inst.stats.currently_booked}/{c.required_reviews}",
-            f"режим: {' '.join(c.mode.to_emoji_text())}",
-            f"окно поиска: {from_pretty} → {to_pretty}",
-            f"последняя попытка: {ensure_str(inst.stats.last_ping, getter=dt_to_pretty, tz=tz)}",
-            f"всего: {inst.stats.attempts_total} ({inst.stats.attempts_success} успешных, {inst.stats.attempts_failed} с ошибкой)",
-        ]
+        num_reviews_line = (
+            f"проверок: {inst.stats.currently_booked}/{c.required_reviews}" if c.mode == Mode.FIND_AND_BOOK else ""
+        )
+        bot_lines = list(
+            filter(
+                None,
+                [
+                    f"{state_emoji} #{c.bot_id} [{state_text}]",
+                    f"режим: {' '.join(c.mode.to_emoji_text())}",
+                    num_reviews_line,
+                    f"окно поиска: {from_pretty} → {to_pretty}",
+                    f"последняя попытка: {ensure_str(inst.stats.last_ping, getter=dt_to_pretty, tz=tz)}",
+                    f"всего: {inst.stats.attempts_total} ({inst.stats.attempts_success} успешных, {inst.stats.attempts_failed} с ошибкой)",
+                ],
+            )
+        )
         if c.interval_sec != self._bot_manager.poll_interval_sec:
             bot_lines.append(f"интервал: {c.interval_sec} секунд")
         self._add_indent(bot_lines, STATUS_LINE_INDENT * 3, first_indent_delta=len(state_emoji) * 3)

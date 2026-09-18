@@ -306,12 +306,13 @@ class EditFlow(CustomInputFlow):
         tz = get_tzinfo(context)
         from_pretty = dt_to_pretty(c.from_dt, tz=tz)
         to_pretty = dt_to_pretty(c.to_dt, tz=tz)
+        num_reviews_line = f"количество проверок: {c.required_reviews}\n" if c.mode == Mode.FIND_AND_BOOK else ""
         text = (
             f"✏️ бот #{c.bot_id} ({project_name})\n"
+            f"режим: {' '.join(c.mode.to_emoji_text())}\n"
+            f"{num_reviews_line}"
             f"окно: {from_pretty} → {to_pretty}\n"
             f"интервал: {c.interval_sec} секунд\n"
-            f"режим: {' '.join(c.mode.to_emoji_text())}\n"
-            f"количество проверок: {c.required_reviews}\n"
             f"статус: {' '.join(inst.state.to_emoji_text())}\n\n"
         )
         return text

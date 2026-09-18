@@ -240,14 +240,20 @@ class StartFlow(CustomInputFlow):
             project, getter=lambda proj: markdown.backtick_wrap(proj.name) if is_markdown else proj.name
         )
         currently_booked = ensure_str(project, getter=lambda proj: proj.review_info.booked)
+        num_reviews_line = (
+            f"количество проверок: {currently_booked}/{ensure_str(context.ensured_chat_data.start_required_reviews)}"
+            if context.ensured_chat_data.start_mode == Mode.FIND_AND_BOOK
+            else ""
+        )
         tz = get_tzinfo(context)
         lines = [
             f"проект: {project_name} (ID {ensure_str(context.ensured_chat_data.start_project_id)})",
             f"режим: {ensure_str(context.ensured_chat_data.start_mode, getter=lambda mode: ' '.join(mode.to_emoji_text()))}",
-            f"количество проверок: {currently_booked}/{ensure_str(context.ensured_chat_data.start_required_reviews)}",
+            num_reviews_line,
             f"начало поиска: {ensure_str(context.ensured_chat_data.start_from, getter=dt_to_pretty, tz=tz)}",
             f"конец поиска: {ensure_str(context.ensured_chat_data.start_to, getter=dt_to_pretty, tz=tz)}",
         ]
         line_idx = self._get_action_idx(action) if action else len(lines)
-        project_info_text = "\n".join(lines[:line_idx]) + "\n\n"
+        chosen_lines = list(filter(None, lines[:line_idx]))
+        project_info_text = "\n".join(chosen_lines) + "\n\n"
         return project_info_text

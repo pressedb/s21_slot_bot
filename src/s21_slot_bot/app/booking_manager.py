@@ -430,6 +430,7 @@ class BookingManager:
         return "\n\n".join(sections)
 
 
+# TODO: extended flag to not pass in cancelled notifications
 def format_booking_details(booking: ActualBooking, tz: tzinfo) -> list[str]:
     lines = [f"🕒 {dt_to_markdown(booking.start, tz=tz)} → {dt_to_markdown(booking.end, tz=tz)}"]
     if booking.project_name:
