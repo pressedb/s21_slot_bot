@@ -367,9 +367,10 @@ class BookingManager:
                     else "⚠️ записи на твои проверки отменены!"
                 )
         tz = get_tzinfo(context)
-        text = self._format_bookings_message(bookings, header, tz)
+        text = self._format_bookings_message(bookings, header, tz, is_extended=False)
         await self._messenger.send(context, text, parse_mode=ParseMode.MARKDOWN_V2)
 
+    # TODO: send on start of review too?
     async def _notify_on_upcoming_reviews(
         self,
         bookings: Sequence[ActualBooking],
@@ -423,22 +424,26 @@ class BookingManager:
         key = NotificationKey(id=booking.id, direction=direction)
         return key
 
-    def _format_bookings_message(self, bookings: Sequence[ActualBooking], header: str, tz: tzinfo) -> str:
+    def _format_bookings_message(
+        self, bookings: Sequence[ActualBooking], header: str, tz: tzinfo, is_extended: bool = True
+    ) -> str:
         sections = [header]
         for booking in sorted(bookings, key=lambda item: item.start):
-            sections.append("\n".join(format_booking_details(booking, tz)))
+            sections.append("\n".join(format_booking_details(booking, tz, is_extended=is_extended)))
         return "\n\n".join(sections)
 
 
-# TODO: extended flag to not pass in cancelled notifications
-def format_booking_details(booking: ActualBooking, tz: tzinfo) -> list[str]:
+def format_booking_details(booking: ActualBooking, tz: tzinfo, is_extended: bool = True) -> list[str]:
     lines = [f"🕒 {dt_to_markdown(booking.start, tz=tz)} → {dt_to_markdown(booking.end, tz=tz)}"]
     if booking.project_name:
         lines.append(f"📚 проект: {markdown.backtick_wrap(booking.project_name)}")
     if booking.student_login:
-        lines.append(f"👤 студент: {booking.student_login}")
-    if booking.url:
-        lines.append(f"🔗 {markdown.format_inline_link('ссылка для подключения', booking.url)}")
+        lines.append(f"👤 студент: {markdown.backtick_wrap(booking.student_login)}")
+    if is_extended:
+        if booking.call_url:
+            lines.append(f"📞 {markdown.format_inline_link('ссылка на видео-звонок', booking.call_url)}")
+        if booking.checklist_url:
+            lines.append(f"📋 {markdown.format_inline_link('ссылка на чеклист', booking.checklist_url)}")
     return lines
 
 

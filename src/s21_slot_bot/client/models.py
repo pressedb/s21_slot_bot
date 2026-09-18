@@ -10,10 +10,11 @@ from pydantic import (
     Field,
     NonNegativeInt,
     PositiveInt,
+    computed_field,
 )
 from pydantic.alias_generators import to_camel
 
-from s21_slot_bot.client.consts import MAX_REQUIRED_REVIEWS
+from s21_slot_bot.client.consts import MAX_REQUIRED_REVIEWS, PLATFORM_URL
 
 type CoercedStr = Annotated[str, BeforeValidator(lambda val: str(val) if isinstance(val, int) else val)]
 type RequiredReviews = Annotated[PositiveInt, Field(le=MAX_REQUIRED_REVIEWS)]
@@ -110,7 +111,6 @@ class NotificationKey(BaseModel):
     direction: BookingDirection
 
 
-# TODO: add checklist_id (https://platform.21-school.ru/checklist/{id})
 class BookingBase(S21Model):
     id: str = Field(description="Booking ID, taken from S21 or generated for dry-runs")
     start: AwareDatetime = Field(
@@ -119,6 +119,17 @@ class BookingBase(S21Model):
     end: AwareDatetime = Field(
         description="End time of the booked slot", validation_alias=AliasPath("eventSlot", "end")
     )
+    call_url: str | None = Field(default=None, description="URL of the online review call", alias="vcLinkUrl")
+    checklist_id: str | None = Field(
+        default=None,
+        description="ID for the checklist URL",
+        validation_alias=AliasPath("additionalChecklist", "filledChecklistId"),
+    )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def checklist_url(self) -> str | None:
+        return f"{PLATFORM_URL}/checklist/{self.checklist_id}" if self.checklist_id else None
 
 
 class RevieweeBooking(BookingBase):
@@ -129,7 +140,6 @@ class RevieweeBooking(BookingBase):
     student_login: str | None = Field(
         default=None, description="Verifier student login", validation_alias=AliasPath("verifierUser", "login")
     )
-    url: str | None = Field(default=None, description="URL of the online review call", alias="vcLinkUrl")
 
 
 class DryRevieweeBooking(BookingBase):
@@ -148,7 +158,6 @@ class VerifierBooking(BookingBase):
         description="Reviewee student login",
         validation_alias=AliasPath("verifiableInfo", "verifiableStudents", 0, "login"),
     )
-    url: str | None = Field(default=None, description="URL of the online review call", alias="vcLinkUrl")
 
 
 class BookingChanges[T: BookingBase](BaseModel):

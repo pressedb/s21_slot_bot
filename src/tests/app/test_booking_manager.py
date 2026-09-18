@@ -234,7 +234,8 @@ class TestBookingManager:
         booking = reviewee_booking_factory(
             booking_id="booking",
             start=now + timedelta(minutes=10),
-            url="https://call" if with_url else None,
+            call_url="https://call" if with_url else None,
+            checklist_id="123" if with_url else None,
             student_login="verifier",
         )
         messenger.send = AsyncMock()
@@ -251,7 +252,8 @@ class TestBookingManager:
         assert "скоро начинается проверка твоего проекта" in text
         assert booking.project_name in text
         assert "verifier" in text
-        assert ("ссылка для подключения" in text) is with_url
+        assert ("ссылка на видео\\-звонок" in text) is with_url
+        assert ("ссылка на чеклист" in text) is with_url
         assert booking_manager._notifications_sent == {
             NotificationKey(id=booking.id, direction=BookingDirection.REVIEWEE)
         }
@@ -270,7 +272,7 @@ class TestBookingManager:
             start=now + timedelta(minutes=10),
             project_name="SQLB9_OLAP",
             student_login="student",
-            url="https://call",
+            call_url="https://call",
         )
         messenger.send = AsyncMock()
 
@@ -355,12 +357,14 @@ class TestBookingManager:
                 project_name="P",
                 student_login="student1",
                 start=now + timedelta(hours=1),
+                call_url="https://call1",
             ),
             reviewee_booking_factory(
                 booking_id="2",
                 project_name="P",
                 student_login="student2",
                 start=now + timedelta(hours=2),
+                call_url="https://call2",
             ),
         ]
 
@@ -378,6 +382,7 @@ class TestBookingManager:
         assert text.count("🕒") == 2
         assert "student1" in text
         assert "student2" in text
+        assert "call" not in text
 
     async def test_notify_cancelled_verifier_reviews(
         self,

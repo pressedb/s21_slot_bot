@@ -136,7 +136,7 @@ class TestStatusFlow:
             start=now + timedelta(hours=1),
             project_name="SQLB9_OLAP",
             student_login="student",
-            url="https://call",
+            call_url="https://call",
         )
         booking_manager._verifier_bookings = {booking.id: booking}
 
@@ -145,4 +145,4 @@ class TestStatusFlow:
         assert "твои проверки" in text
         assert "SQLB9_OLAP" in text
         assert "student" in text
-        assert "ссылка для подключения" in text
+        assert "ссылка на видео\\-звонок" in text

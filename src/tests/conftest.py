@@ -539,7 +539,8 @@ def reviewee_booking_factory(now: datetime) -> Callable[..., RevieweeBooking]:
         student_login: str | None = "student",
         start: datetime | None = None,
         end: datetime | None = None,
-        url: str | None = None,
+        call_url: str | None = None,
+        checklist_id: str | None = None,
     ) -> RevieweeBooking:
         return RevieweeBooking(
             id=booking_id,
@@ -549,7 +550,8 @@ def reviewee_booking_factory(now: datetime) -> Callable[..., RevieweeBooking]:
             student_login=student_login,
             start=start or now + timedelta(minutes=30),
             end=end or now + timedelta(hours=1),
-            url=url,
+            call_url=call_url,
+            checklist_id=checklist_id,
         )
 
     return factory
@@ -586,7 +588,8 @@ def verifier_booking_factory(now: datetime) -> Callable[..., VerifierBooking]:
         project_id: str | None = "project-id",
         project_name: str | None = "Project",
         student_login: str | None = "student",
-        url: str | None = None,
+        call_url: str | None = None,
+        checklist_id: str | None = None,
     ) -> VerifierBooking:
         actual_start = start or now + timedelta(hours=1)
         return VerifierBooking(
@@ -596,7 +599,8 @@ def verifier_booking_factory(now: datetime) -> Callable[..., VerifierBooking]:
             project_id=project_id,
             project_name=project_name,
             student_login=student_login,
-            url=url,
+            call_url=call_url,
+            checklist_id=checklist_id,
         )
 
     return factory
