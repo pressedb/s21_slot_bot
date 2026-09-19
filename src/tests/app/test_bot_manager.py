@@ -207,14 +207,40 @@ class TestBotManager:
         job_mock.data = {"inst": inst, "task_id": "task-1", "answer_id": "answer-1"}
         job_mock.name = inst.cfg.bot_id
         context.job = job_mock
-        s21_client.get_slots_info = AsyncMock(return_value=slots_info_factory(booked=2))
+        s21_client.get_slots_info = AsyncMock(return_value=slots_info_factory(booked=1))
+        booking_manager.book = AsyncMock()
+        booking_manager.book_dry = AsyncMock()
+        with patch("s21_slot_bot.app.bot_manager.datetime") as datetime_mock:
+            datetime_mock.now.return_value = now
+            await bot_manager._search(context)
+        assert inst.stats.currently_booked == 1
+        booking_manager.book_dry.assert_awaited_once()
+
+    async def test_search_only_find_with_max_currently_booked_does_nothing(
+        self,
+        bot_manager: BotManager,
+        s21_client: School21Client,
+        booking_manager: BookingManager,
+        bot_instance_factory: Callable[..., BotInstance],
+        slots_info_factory: Callable[..., SlotsInfo],
+        context: CustomContext,
+        job_mock: Job,
+        now: datetime,
+    ) -> None:
+        inst = bot_instance_factory(
+            state=Lifecycle.RUNNING, required_reviews=1, to_dt=now + timedelta(hours=1), mode=Mode.ONLY_FIND
+        )
+        job_mock.data = {"inst": inst, "task_id": "task-1", "answer_id": "answer-1"}
+        job_mock.name = inst.cfg.bot_id
+        context.job = job_mock
+        s21_client.get_slots_info = AsyncMock(return_value=slots_info_factory(booked=2, required=2))
         booking_manager.book = AsyncMock()
         booking_manager.book_dry = AsyncMock()
         with patch("s21_slot_bot.app.bot_manager.datetime") as datetime_mock:
             datetime_mock.now.return_value = now
             await bot_manager._search(context)
         assert inst.stats.currently_booked == 2
-        booking_manager.book_dry.assert_awaited_once()
+        booking_manager.book_dry.assert_not_awaited()
 
     async def test_search_no_candidate(
         self,

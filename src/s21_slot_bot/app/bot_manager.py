@@ -158,9 +158,12 @@ class BotManager:
             currently_booked = slots_info.review_info.booked
             inst.stats.currently_booked = currently_booked
             missing = cfg.required_reviews - currently_booked
-            if missing < 1 and cfg.mode == Mode.FIND_AND_BOOK:
+            if currently_booked >= slots_info.review_info.required or (missing < 1 and cfg.mode == Mode.FIND_AND_BOOK):
                 logger.info(
-                    "No more reviews required (%d/%d), finishing current search", currently_booked, cfg.required_reviews
+                    "No more reviews required (current %d / configured %d / max %d), finishing current search",
+                    currently_booked,
+                    cfg.required_reviews,
+                    slots_info.review_info.required,
                 )
                 return
 
