@@ -2,6 +2,8 @@ import json
 from http import HTTPStatus
 from typing import Any
 
+from s21_slot_bot.common.http_status import get_http_status_description
+
 
 class Error(Exception):
     default_help_text: str | None = None
@@ -9,7 +11,7 @@ class Error(Exception):
     def __init__(
         self,
         message: str,
-        status: HTTPStatus | None = None,
+        status: HTTPStatus | int | None = None,
         location: dict[str, Any] | None = None,
         help_text: str | None = None,
     ):
@@ -24,7 +26,7 @@ class Error(Exception):
         return f"message=`{self.message}`, status=`{self.effective_status}`, help=`{self.help_text}`\nlocation={self.location_dump}"
 
     @property
-    def effective_status(self) -> HTTPStatus | None:
+    def effective_status(self) -> HTTPStatus | int | None:
         if self.status is not None:
             return self.status
         cause = self.__cause__
@@ -40,7 +42,8 @@ class Error(Exception):
         if self.help_text:
             text += f"\nℹ️ {self.help_text}"
         if status := self.effective_status:
-            text += f"\nстатус: {status} ({status.phrase})"
+            status_description = get_http_status_description(status)
+            text += f"\nстатус: {status} ({status_description})"
         return text
 
 

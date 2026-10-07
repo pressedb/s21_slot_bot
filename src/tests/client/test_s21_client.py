@@ -352,6 +352,21 @@ class TestSchool21Client:
             await s21_client._graphql(OperationName.GET_USER, {}, logger_mock)
         assert exc_info.value.effective_status == HTTPStatus.BAD_GATEWAY
 
+    async def test_graphql_error_not_in_standard_http_status_codes(
+        self,
+        s21_client: School21Client,
+        logger_mock: LoggerLike,
+        session_mock: aiohttp.ClientSession,
+        response_factory: Callable[..., aiohttp.ClientResponse],
+    ) -> None:
+        response_mock = response_factory(status=521, reason="Web Server Is Down", text="Cloudflare error")
+        session_mock.post.return_value = response_context(response_mock)
+        s21_client._session_internal = session_mock
+        s21_client._campus_id = "cid"
+        with pytest.raises(School21Error) as exc_info:
+            await s21_client._graphql(OperationName.GET_USER, {}, logger_mock)
+        assert exc_info.value.effective_status == 521
+
     async def test_get_campus_id(
         self,
         s21_client: School21Client,

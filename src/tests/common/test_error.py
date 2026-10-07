@@ -65,11 +65,21 @@ class TestError:
                 "try again",
                 "❌ oops\nℹ️ try again\nстатус: 404 (Not Found)",
             ),
+            (
+                521,
+                "cloudflare!",
+                "❌ oops\nℹ️ cloudflare!\nстатус: 521 (ошибка сервера)",
+            ),
+            (
+                666,
+                "what is this?",
+                "❌ oops\nℹ️ what is this?\nстатус: 666 (неизвестная ошибка)",
+            ),
         ],
     )
     def test_to_pretty(
         self,
-        status: HTTPStatus | None,
+        status: HTTPStatus | int | None,
         help_text: str | None,
         expected: str,
     ) -> None:

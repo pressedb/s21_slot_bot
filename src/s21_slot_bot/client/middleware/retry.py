@@ -10,6 +10,7 @@ from s21_slot_bot.client.config import S21ClientConfig
 from s21_slot_bot.client.errors import School21Error, School21LoginError
 from s21_slot_bot.client.middleware.base import School21Middleware
 from s21_slot_bot.common.error import get_error_description
+from s21_slot_bot.common.http_status import get_http_status
 from s21_slot_bot.common.logger import LogEntity, get_id_logger
 
 
@@ -27,11 +28,11 @@ class School21RetryMiddleware(School21Middleware):
     ) -> ClientResponse:
         logger = get_id_logger(LogEntity.MIDDLEWARE)
         delay = self._delay_sec
-        resp_status: HTTPStatus | None = None
+        resp_status: HTTPStatus | int | None = None
         for attempt in range(1, self._attempts + 1):
             try:
                 response = await handler(request)
-                resp_status = HTTPStatus(response.status)
+                resp_status = get_http_status(response)
                 if resp_status >= HTTPStatus.INTERNAL_SERVER_ERROR:
                     response.raise_for_status()
                 _ = await response.json()

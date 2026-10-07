@@ -3,7 +3,6 @@ import asyncio
 import functools
 import json
 from datetime import datetime
-from http import HTTPStatus
 from importlib.resources import files
 from typing import Any, Literal, NoReturn
 
@@ -41,6 +40,7 @@ from s21_slot_bot.client.models import (
     SlotsInfo,
     VerifierBooking,
 )
+from s21_slot_bot.common.http_status import get_http_status
 from s21_slot_bot.common.logger import LoggerLike
 from s21_slot_bot.common.time import dt_to_isoz
 
@@ -319,7 +319,7 @@ class School21Client:
                 raise School21Error(
                     f"ошибка запроса к Школе 21 во время исполнения операции "
                     f"{operation_name}: {resp.status} {resp.reason}",
-                    status=HTTPStatus(resp.status),
+                    status=get_http_status(resp),
                     location={
                         "operation": operation_name,
                         "input": variables,
@@ -351,7 +351,7 @@ class School21Client:
                 text = await resp.text()
                 raise School21Error(
                     "не удалось получить информацию о кампусе",
-                    status=HTTPStatus(resp.status),
+                    status=get_http_status(resp),
                     location={"response": text},
                 )
             resp_body: dict[str, Any] = await resp.json()

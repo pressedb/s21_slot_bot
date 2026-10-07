@@ -432,7 +432,7 @@ def service(
 def response_factory() -> Callable[..., aiohttp.ClientResponse]:
     def factory(
         *,
-        status: HTTPStatus = HTTPStatus.OK,
+        status: HTTPStatus | int = HTTPStatus.OK,
         reason: str = "",
         text: str = "",
         json: Any = None,

@@ -26,6 +26,7 @@ from s21_slot_bot.client.models import (
     GrantType,
     Tokens,
 )
+from s21_slot_bot.common.http_status import get_http_status
 
 
 class School21AuthMiddleware(School21Middleware):
@@ -94,9 +95,7 @@ class School21AuthMiddleware(School21Middleware):
         async with session.get(self._auth_endpoint, middlewares=()) as auth_resp:
             auth_text = await auth_resp.text()
             if not auth_resp.ok:
-                raise School21LoginError(
-                    f"ошибка авторизации: `{auth_resp.reason}`", status=HTTPStatus(auth_resp.status)
-                )
+                raise School21LoginError(f"ошибка авторизации: `{auth_resp.reason}`", status=get_http_status(auth_resp))
 
         action_url = self._extract_login_action(auth_text, AUTH_URL)
         async with session.post(
@@ -110,7 +109,7 @@ class School21AuthMiddleware(School21Middleware):
         ) as action_resp:
             code = self._extract_code_from_redirect_history([*action_resp.history, action_resp])
             if not code:
-                raise School21LoginError("не удалось извлечь код авторизации", status=HTTPStatus(action_resp.status))
+                raise School21LoginError("не удалось извлечь код авторизации", status=get_http_status(action_resp))
 
         async with session.post(
             self._token_endpoint,
@@ -129,7 +128,7 @@ class School21AuthMiddleware(School21Middleware):
                 body = await token_resp.text()
                 raise School21LoginError(
                     f"ошибка при запросе токена: `{token_resp.reason}`",
-                    status=HTTPStatus(token_resp.status),
+                    status=get_http_status(token_resp),
                     location={"body": body},
                 )
             payload = await token_resp.json()
