@@ -104,12 +104,13 @@ class InputHandler:
                     logger.info("No update has taken place in error handle: %s", error)
                     return
                 await self._messenger.send(context, f"❌ ошибка обработки запроса телеграма - {error_description}")
+            case httpx.TransportError() | telegram.error.NetworkError():
+                logger.exception("Error with connection, likely while trying to fetch updates, suppressing the error")
+                return
             case MenuError():
                 await self._messenger.render_menu_error(context, error_description, logger)
             case Error():
                 await self._messenger.send(context, error_description)
-            case httpx.TransportError(), telegram.error.NetworkError():
-                logger.exception("Error with connection, likely while trying to fetch updates, suppressing the error")
             case _:
                 await self._messenger.send(context, f"❌ неизвестная ошибка - {error_description}")
         if (job := context.job) and job.name and job.name != BOOKING_REFRESHER_JOB_NAME:
