@@ -12,7 +12,7 @@ from s21_slot_bot.app.consts import (
     MIN_NUM_BOTS,
 )
 from s21_slot_bot.app.errors import AppNotInitializedError
-from s21_slot_bot.client.models import ProjectExtended, RequiredReviews
+from s21_slot_bot.client.models import BookedReviews, ProjectExtended, RequiredReviews
 from s21_slot_bot.common.logger import LogEntity, LoggerAdapterID, get_id_logger
 
 type IntervalSec = Annotated[PositiveInt, Field(ge=MIN_INTERVAL_SEC, le=MAX_INTERVAL_SEC)]
@@ -87,7 +87,7 @@ class Stats(BaseModel):
     attempts_total: NonNegativeInt = 0
     attempts_success: NonNegativeInt = 0
     attempts_failed: NonNegativeInt = 0
-    currently_booked: NonNegativeInt = 0
+    currently_booked: BookedReviews = 0
 
 
 class SearchConfig(BaseModel):
@@ -123,7 +123,7 @@ class ChatData(BaseModel):
     projects_map: dict[str, ProjectExtended] = Field(default_factory=dict)
     last_booking_refresh_time: AwareDatetime | None = None
     start_project_id: str | None = None
-    start_required_reviews: RequiredReviews | None = None
+    selected_required_reviews: RequiredReviews | None = None
     start_from: AwareDatetime | None = None
     start_to: AwareDatetime | None = None
     start_mode: Mode | None = None

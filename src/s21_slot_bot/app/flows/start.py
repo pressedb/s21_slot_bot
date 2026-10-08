@@ -66,13 +66,20 @@ class StartFlow(CustomInputFlow):
                 context.ensured_chat_data.start_mode = mode
                 match mode:
                     case Mode.ONLY_FIND:
-                        context.ensured_chat_data.start_required_reviews = MIN_REQUIRED_REVIEWS
+                        context.ensured_chat_data.selected_required_reviews = MIN_REQUIRED_REVIEWS
                         await self.pick_from(query, context)
                     case Mode.FIND_AND_BOOK:
                         await self.pick_num_reviews(query, context)
             case InputFlowAction.PICK_NUM_REVIEWS:
                 num_reviews = RequiredReviewsAdapter.validate_strings(callback_data.pop())
-                context.ensured_chat_data.start_required_reviews = num_reviews
+                project = self._get_project(context)
+                currently_booked = project.review_info.booked
+                context.ensured_chat_data.selected_required_reviews = num_reviews
+                if num_reviews == currently_booked:
+                    await self.confirm_num_reviews(query, context)
+                    return
+                await self.pick_from(query, context)
+            case InputFlowAction.CONFIRM_NUM_REVIEWS:
                 await self.pick_from(query, context)
             case InputFlowAction.PICK_FROM:
                 now = datetime.now(tz=tz)
@@ -196,7 +203,7 @@ class StartFlow(CustomInputFlow):
             bot_id=bot_id,
             project_id=project.id,
             project_name=project.name,
-            required_reviews=context.ensured_chat_data.start_required_reviews,
+            required_reviews=context.ensured_chat_data.selected_required_reviews,
             from_dt=context.ensured_chat_data.start_from,
             to_dt=context.ensured_chat_data.start_to,
             interval_sec=self._bot_manager.poll_interval_sec,
@@ -222,6 +229,8 @@ class StartFlow(CustomInputFlow):
                 return None
             case InputFlowAction.PICK_FROM if context.ensured_chat_data.start_mode == Mode.ONLY_FIND:
                 return InputFlowAction.PICK_MODE
+            case InputFlowAction.CONFIRM_NUM_REVIEWS:
+                return InputFlowAction.PICK_NUM_REVIEWS
             case _:
                 cur_idx = self._get_action_idx(action)
                 prev_action = self._ordered_actions[cur_idx - 1] if 1 <= cur_idx < len(self._ordered_actions) else None
@@ -241,7 +250,7 @@ class StartFlow(CustomInputFlow):
         )
         currently_booked = ensure_str(project, getter=lambda proj: proj.review_info.booked)
         num_reviews_line = (
-            f"количество проверок: {currently_booked}/{ensure_str(context.ensured_chat_data.start_required_reviews)}"
+            f"количество проверок: {currently_booked}/{ensure_str(context.ensured_chat_data.selected_required_reviews)}"
             if context.ensured_chat_data.start_mode == Mode.FIND_AND_BOOK
             else ""
         )

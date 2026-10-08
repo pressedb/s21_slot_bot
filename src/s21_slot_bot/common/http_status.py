@@ -4,8 +4,10 @@ from aiohttp import ClientResponse
 
 
 def get_http_status(response: ClientResponse) -> HTTPStatus | int:
-    status = HTTPStatus(response.status) if response.status in HTTPStatus else response.status
-    return status
+    try:
+        return HTTPStatus(response.status)
+    except ValueError:
+        return response.status
 
 
 def get_http_status_description(status: HTTPStatus | int) -> str:

@@ -177,25 +177,111 @@ class TestEditFlow:
         else:
             edit_flow.pick_num_reviews.assert_awaited_once()
 
-    async def test_set_num_reviews(
+    @pytest.mark.parametrize(
+        "required_originally, is_updated",
+        (
+            [2, True],
+            [3, False],
+        ),
+    )
+    async def test_pick_num_reviews_to_different_number_than_booked(
         self,
         edit_flow: EditFlow,
         bot_manager: BotManager,
         bot_instance_factory: Callable[..., BotInstance],
+        project_extended_factory: Callable[..., ProjectExtended],
+        query_mock: CallbackQuery,
+        context: CustomContext,
+        required_originally: int,
+        is_updated: bool,
+    ) -> None:
+        inst = bot_instance_factory(required_reviews=required_originally)
+        project = project_extended_factory(project_id=inst.cfg.project_id, booked=0)
+        context.ensured_chat_data.edit_bot_id = inst.cfg.bot_id
+        context.ensured_chat_data.projects_map = {project.id: project}
+        bot_manager.get_bot = MagicMock(return_value=inst)
+        edit_flow.edit_menu = AsyncMock()
+
+        await edit_flow.parse_callback(["3", InputFlowAction.PICK_NUM_REVIEWS], query_mock, context)
+
+        assert inst.cfg.required_reviews == 3
+        assert ("обновлено" in edit_flow.edit_menu.await_args.kwargs["update_text"]) is is_updated
+
+    async def test_pick_num_reviews_to_same_number_as_booked(
+        self,
+        edit_flow: EditFlow,
+        bot_manager: BotManager,
+        bot_instance_factory: Callable[..., BotInstance],
+        project_extended_factory: Callable[..., ProjectExtended],
         query_mock: CallbackQuery,
         context: CustomContext,
     ) -> None:
-        inst = bot_instance_factory(required_reviews=2)
+        inst = bot_instance_factory(required_reviews=3)
+        project = project_extended_factory(project_id=inst.cfg.project_id, booked=2)
         context.ensured_chat_data.edit_bot_id = inst.cfg.bot_id
+        context.ensured_chat_data.projects_map = {project.id: project}
         bot_manager.get_bot = MagicMock(return_value=inst)
         edit_flow.edit_menu = AsyncMock()
-        await edit_flow.parse_callback(["3", InputFlowAction.PICK_NUM_REVIEWS], query_mock, context)
-        assert inst.cfg.required_reviews == 3
-        assert "обновлено" in edit_flow.edit_menu.await_args.kwargs["update_text"]
+        edit_flow.confirm_num_reviews = AsyncMock()
 
-        edit_flow.edit_menu.reset_mock()
-        await edit_flow.parse_callback(["3", InputFlowAction.PICK_NUM_REVIEWS], query_mock, context)
-        assert edit_flow.edit_menu.await_args.kwargs["update_text"] == ""
+        await edit_flow.parse_callback(["2", InputFlowAction.PICK_NUM_REVIEWS], query_mock, context)
+
+        assert inst.cfg.required_reviews == 3
+        assert context.ensured_chat_data.selected_required_reviews == 2
+        edit_flow.edit_menu.assert_not_awaited()
+        edit_flow.confirm_num_reviews.assert_awaited_once()
+
+    async def test_parse_callback_confirm_num_reviews_updates_reviews(
+        self,
+        edit_flow: EditFlow,
+        bot_manager: BotManager,
+        query_mock: CallbackQuery,
+        bot_instance_factory: Callable[..., BotInstance],
+        context: CustomContext,
+    ) -> None:
+        inst = bot_instance_factory(required_reviews=2)
+        bot_manager.get_bot = MagicMock(return_value=inst)
+        context.ensured_chat_data.edit_bot_id = inst.cfg.bot_id
+        context.ensured_chat_data.selected_required_reviews = 3
+        edit_flow.edit_menu = AsyncMock()
+
+        await edit_flow.parse_callback([InputFlowAction.CONFIRM_NUM_REVIEWS], query_mock, context)
+
+        assert inst.cfg.required_reviews == 3
+        edit_flow.edit_menu.assert_awaited_once_with(
+            query_mock, context, update_text="✅ количество проверок обновлено"
+        )
+
+    async def test_parse_callback_confirm_unchanged_num_reviews(
+        self,
+        edit_flow: EditFlow,
+        bot_manager: BotManager,
+        query_mock: CallbackQuery,
+        bot_instance_factory: Callable[..., BotInstance],
+        context: CustomContext,
+    ) -> None:
+        inst = bot_instance_factory(required_reviews=2)
+        bot_manager.get_bot = MagicMock(return_value=inst)
+        context.ensured_chat_data.edit_bot_id = inst.cfg.bot_id
+        context.ensured_chat_data.selected_required_reviews = 2
+
+        edit_flow.edit_menu = AsyncMock()
+
+        await edit_flow.parse_callback([InputFlowAction.CONFIRM_NUM_REVIEWS], query_mock, context)
+
+        assert inst.cfg.required_reviews == 2
+        edit_flow.edit_menu.assert_awaited_once_with(query_mock, context, update_text="")
+
+    async def test_parse_callback_confirm_num_reviews_without_selected_reviews(
+        self,
+        edit_flow: EditFlow,
+        query_mock: CallbackQuery,
+        context: CustomContext,
+    ) -> None:
+        context.ensured_chat_data.selected_required_reviews = None
+
+        with pytest.raises(InternalError, match="ошибка при подтверждении количества проверок"):
+            await edit_flow.parse_callback([InputFlowAction.CONFIRM_NUM_REVIEWS], query_mock, context)
 
     async def test_set_interval_changed_and_unchanged(
         self,

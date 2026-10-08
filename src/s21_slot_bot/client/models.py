@@ -8,17 +8,15 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
-    NonNegativeInt,
-    PositiveInt,
     computed_field,
 )
 from pydantic.alias_generators import to_camel
 
-from s21_slot_bot.client.consts import MAX_REQUIRED_REVIEWS, PLATFORM_URL
+from s21_slot_bot.client.consts import MAX_REQUIRED_REVIEWS, MIN_REQUIRED_REVIEWS, PLATFORM_URL
 
 type CoercedStr = Annotated[str, BeforeValidator(lambda val: str(val) if isinstance(val, int) else val)]
-type RequiredReviews = Annotated[PositiveInt, Field(le=MAX_REQUIRED_REVIEWS)]
-type BookedReviews = Annotated[NonNegativeInt, Field(le=MAX_REQUIRED_REVIEWS)]
+type RequiredReviews = Annotated[int, Field(ge=MIN_REQUIRED_REVIEWS, le=MAX_REQUIRED_REVIEWS)]
+type BookedReviews = Annotated[int, Field(ge=0, le=MAX_REQUIRED_REVIEWS)]
 type ActualBooking = RevieweeBooking | VerifierBooking
 
 

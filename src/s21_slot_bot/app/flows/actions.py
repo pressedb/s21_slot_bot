@@ -8,6 +8,7 @@ class FlowAction(StrEnum): ...
 class InputFlowAction(FlowAction):
     PICK_MODE = enum.auto()
     PICK_NUM_REVIEWS = enum.auto()
+    CONFIRM_NUM_REVIEWS = enum.auto()
     PICK_FROM = enum.auto()
     PICK_TO = enum.auto()
     BACK = enum.auto()

@@ -92,10 +92,27 @@ class EditFlow(CustomInputFlow):
                         await self.pick_num_reviews(query, context)
             case InputFlowAction.PICK_NUM_REVIEWS:
                 num_reviews = RequiredReviewsAdapter.validate_strings(callback_data.pop())
+                project = self._get_project(context)
+                currently_booked = project.review_info.booked
+                if num_reviews == currently_booked:
+                    context.ensured_chat_data.selected_required_reviews = num_reviews
+                    await self.confirm_num_reviews(query, context)
+                    return
                 bot_id = context.ensured_chat_data.edit_bot_id
                 inst = self._bot_manager.get_bot(bot_id)
                 update_text = "✅ количество проверок обновлено" if inst.cfg.required_reviews != num_reviews else ""
                 inst.cfg.required_reviews = num_reviews
+                await self.edit_menu(query, context, update_text=update_text)
+            case InputFlowAction.CONFIRM_NUM_REVIEWS:
+                selected_num_reviews = context.ensured_chat_data.selected_required_reviews
+                if not selected_num_reviews:
+                    raise InternalError("ошибка при подтверждении количества проверок")
+                bot_id = context.ensured_chat_data.edit_bot_id
+                inst = self._bot_manager.get_bot(bot_id)
+                update_text = (
+                    "✅ количество проверок обновлено" if inst.cfg.required_reviews != selected_num_reviews else ""
+                )
+                inst.cfg.required_reviews = selected_num_reviews
                 await self.edit_menu(query, context, update_text=update_text)
             case EditFlowAction.PICK_INTERVAL:
                 await self.edit_interval(query, context)
@@ -147,7 +164,6 @@ class EditFlow(CustomInputFlow):
         logger = get_user_input_logger(user_input)
         logger.info("Showing edit menu...")
         action = EditFlowAction.SHOW_MENU
-        prev_action = self._get_prev_action(action, context)
         self._set_screen(action, context)
         buttons = [
             [InlineKeyboardButton("начальное время", callback_data=f"{self._category}:{EditFlowAction.MENU_FROM}")],
@@ -164,16 +180,7 @@ class EditFlow(CustomInputFlow):
                 InlineKeyboardButton("перезапустить", callback_data=f"{self._category}:{EditFlowAction.RESTART}"),
             ],
         ]
-        if prev_action:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        "⏪ Назад",
-                        callback_data=f"{self._category}:{InputFlowAction.BACK}:{prev_action}",
-                    )
-                ],
-            )
-        kb = InlineKeyboardMarkup(buttons)
+        kb = self._create_keyboard(buttons, action, context)
         text = self._get_chosen_project_info_text(context, is_markdown=True) + update_text
         await self._messenger.render_menu_message(context, text, logger, kb=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -197,7 +204,6 @@ class EditFlow(CustomInputFlow):
         logger = get_user_input_logger(user_input)
         logger.info("Editing interval...")
         action = EditFlowAction.SET_INTERVAL
-        prev_action = self._get_prev_action(action, context)
         self._set_screen(action, context)
         buttons = [
             [
@@ -205,16 +211,7 @@ class EditFlow(CustomInputFlow):
                 for seconds in [10, 20, 30, 60, 120]
             ],
         ]
-        if prev_action:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        "⏪ Назад",
-                        callback_data=f"{self._category}:{InputFlowAction.BACK}:{prev_action}",
-                    )
-                ],
-            )
-        kb = InlineKeyboardMarkup(buttons)
+        kb = self._create_keyboard(buttons, action, context)
         text = (
             self._get_chosen_project_info_text(context, action, is_markdown=True)
             + "выбери или введи новый интервал (в секундах):"

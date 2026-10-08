@@ -174,53 +174,134 @@ class TestStartFlow:
         context.ensured_chat_data.projects_map = {project.id: project}
         context.ensured_chat_data.start_project_id = project.id
         context.ensured_chat_data.start_mode = Mode.FIND_AND_BOOK
-        context.ensured_chat_data.start_required_reviews = 2
+        context.ensured_chat_data.selected_required_reviews = 2
         context.ensured_chat_data.start_from = now
         messenger.render_menu_message = AsyncMock()
         await getattr(start_flow, method_name)(update_mock, context)
         assert context.ensured_chat_data.screen == screen
         messenger.render_menu_message.assert_awaited_once()
 
-    async def test_parse_callback_mode_branches(
+    async def test_parse_callback_only_find_mode(
         self,
         start_flow: StartFlow,
         query_mock: CallbackQuery,
         context: CustomContext,
     ) -> None:
         start_flow.pick_from = AsyncMock()
+
         await start_flow.parse_callback([Mode.ONLY_FIND, InputFlowAction.PICK_MODE], query_mock, context)
+
         assert context.ensured_chat_data.start_mode == Mode.ONLY_FIND
-        assert context.ensured_chat_data.start_required_reviews == 1
+        assert context.ensured_chat_data.selected_required_reviews == 1
         start_flow.pick_from.assert_awaited_once()
 
+    async def test_parse_callback_find_and_book_mode(
+        self,
+        start_flow: StartFlow,
+        query_mock: CallbackQuery,
+        context: CustomContext,
+    ) -> None:
         start_flow.pick_num_reviews = AsyncMock()
+
         await start_flow.parse_callback([Mode.FIND_AND_BOOK, InputFlowAction.PICK_MODE], query_mock, context)
+
+        assert context.ensured_chat_data.start_mode == Mode.FIND_AND_BOOK
         start_flow.pick_num_reviews.assert_awaited_once()
 
-    async def test_parse_callback_project_reviews_and_times(
+    async def test_parse_callback_project(
+        self,
+        start_flow: StartFlow,
+        query_mock: CallbackQuery,
+        context: CustomContext,
+    ) -> None:
+        start_flow.pick_mode = AsyncMock()
+
+        await start_flow.parse_callback(["p1", StartFlowAction.PICK_PROJECT], query_mock, context)
+
+        assert context.ensured_chat_data.start_project_id == "p1"
+        start_flow.pick_mode.assert_awaited_once()
+
+    async def test_parse_callback_num_reviews(
+        self,
+        start_flow: StartFlow,
+        query_mock: CallbackQuery,
+        project_extended_factory: Callable[..., ProjectExtended],
+        context: CustomContext,
+    ) -> None:
+        start_flow.pick_from = AsyncMock()
+        start_flow.confirm_num_reviews = AsyncMock()
+        project = project_extended_factory(booked=0)
+        context.ensured_chat_data.projects_map = {project.id: project}
+        context.ensured_chat_data.start_project_id = project.id
+
+        await start_flow.parse_callback(["2", InputFlowAction.PICK_NUM_REVIEWS], query_mock, context)
+
+        assert context.ensured_chat_data.selected_required_reviews == 2
+        start_flow.pick_from.assert_awaited_once()
+        start_flow.confirm_num_reviews.assert_not_awaited()
+
+    async def test_parse_callback_num_reviews_same_number_to_confirm(
+        self,
+        start_flow: StartFlow,
+        query_mock: CallbackQuery,
+        project_extended_factory: Callable[..., ProjectExtended],
+        context: CustomContext,
+    ) -> None:
+        start_flow.pick_from = AsyncMock()
+        start_flow.confirm_num_reviews = AsyncMock()
+        project = project_extended_factory(booked=2)
+        context.ensured_chat_data.projects_map = {project.id: project}
+        context.ensured_chat_data.start_project_id = project.id
+
+        await start_flow.parse_callback(["2", InputFlowAction.PICK_NUM_REVIEWS], query_mock, context)
+
+        assert context.ensured_chat_data.selected_required_reviews == 2
+        start_flow.pick_from.assert_not_awaited()
+        start_flow.confirm_num_reviews.assert_awaited_once()
+
+    async def test_parse_callback_confirm_num_reviews(
+        self,
+        start_flow: StartFlow,
+        query_mock: CallbackQuery,
+        context: CustomContext,
+    ) -> None:
+        context.ensured_chat_data.selected_required_reviews = 2
+        start_flow.pick_from = AsyncMock()
+
+        await start_flow.parse_callback([InputFlowAction.CONFIRM_NUM_REVIEWS], query_mock, context)
+
+        start_flow.pick_from.assert_awaited_once_with(query_mock, context)
+
+    async def test_parse_callback_from(
         self,
         start_flow: StartFlow,
         query_mock: CallbackQuery,
         context: CustomContext,
         now: datetime,
     ) -> None:
-        start_flow.pick_mode = AsyncMock()
-        await start_flow.parse_callback(["p1", StartFlowAction.PICK_PROJECT], query_mock, context)
-        assert context.ensured_chat_data.start_project_id == "p1"
-
-        start_flow.pick_from = AsyncMock()
-        await start_flow.parse_callback(["2", InputFlowAction.PICK_NUM_REVIEWS], query_mock, context)
-        assert context.ensured_chat_data.start_required_reviews == 2
-
         start_flow.pick_to = AsyncMock()
+
         with patch("s21_slot_bot.app.flows.start.datetime") as datetime_mock:
             datetime_mock.now.return_value = now
             await start_flow.parse_callback(["PT30M", InputFlowAction.PICK_FROM], query_mock, context)
-        assert context.ensured_chat_data.start_from == now + timedelta(minutes=30)
 
+        assert context.ensured_chat_data.start_from == now + timedelta(minutes=30)
+        start_flow.pick_to.assert_awaited_once()
+
+    async def test_parse_callback_to(
+        self,
+        start_flow: StartFlow,
+        query_mock: CallbackQuery,
+        context: CustomContext,
+        now: datetime,
+    ) -> None:
+        context.ensured_chat_data.start_from = now
         start_flow.confirm = AsyncMock()
+
         await start_flow.parse_callback(["PT2H", InputFlowAction.PICK_TO], query_mock, context)
-        assert context.ensured_chat_data.start_to == context.ensured_chat_data.start_from + timedelta(hours=2)
+
+        assert context.ensured_chat_data.start_to == now + timedelta(hours=2)
+        start_flow.confirm.assert_awaited_once()
 
     async def test_parse_callback_to_requires_from(
         self,
@@ -231,22 +312,36 @@ class TestStartFlow:
         with pytest.raises(InternalError):
             await start_flow.parse_callback(["PT2H", InputFlowAction.PICK_TO], query_mock, context)
 
-    async def test_back_and_invalid_actions(
+    async def test_parse_callback_back_to_pick_from(
         self,
         start_flow: StartFlow,
         query_mock: CallbackQuery,
         context: CustomContext,
     ) -> None:
         start_flow.pick_from = AsyncMock()
+
         await start_flow.parse_callback([InputFlowAction.PICK_FROM, InputFlowAction.BACK], query_mock, context)
+
         start_flow.pick_from.assert_awaited_once()
 
+    @pytest.mark.parametrize(
+        "callback_data",
+        (
+            ["missing", InputFlowAction.BACK],
+            ["bad"],
+        ),
+    )
+    async def test_parse_callback_invalid_data(
+        self,
+        start_flow: StartFlow,
+        query_mock: CallbackQuery,
+        context: CustomContext,
+        callback_data: list[str | InputFlowAction],
+    ) -> None:
         with pytest.raises(InvalidCallbackDataError):
-            await start_flow.parse_callback(["missing", InputFlowAction.BACK], query_mock, context)
-        with pytest.raises(InvalidCallbackDataError):
-            await start_flow.parse_callback(["bad"], query_mock, context)
+            await start_flow.parse_callback(callback_data, query_mock, context)
 
-    async def test_custom_from_and_to(
+    async def test_custom_from(
         self,
         start_flow: StartFlow,
         update_mock: Update,
@@ -255,29 +350,51 @@ class TestStartFlow:
     ) -> None:
         update_mock.message.text = "PT30M"
         start_flow.pick_to = AsyncMock()
+
         with patch("s21_slot_bot.app.flows.start.datetime") as datetime_mock:
             datetime_mock.now.return_value = now
             await start_flow.custom_from(update_mock, context)
+
         assert context.ensured_chat_data.start_from == now + timedelta(minutes=30)
+        start_flow.pick_to.assert_awaited_once()
 
-        update_mock.message.text = "PT2H"
-        start_flow.confirm = AsyncMock()
-        await start_flow.custom_to(update_mock, context)
-        assert context.ensured_chat_data.start_to == context.ensured_chat_data.start_from + timedelta(hours=2)
-
-    async def test_custom_to_validation(
+    async def test_custom_to(
         self,
         start_flow: StartFlow,
         update_mock: Update,
         context: CustomContext,
         now: datetime,
     ) -> None:
+        context.ensured_chat_data.start_from = now
         update_mock.message.text = "PT2H"
+        start_flow.confirm = AsyncMock()
+
+        await start_flow.custom_to(update_mock, context)
+
+        assert context.ensured_chat_data.start_to == now + timedelta(hours=2)
+        start_flow.confirm.assert_awaited_once()
+
+    async def test_custom_to_without_start_time(
+        self,
+        start_flow: StartFlow,
+        update_mock: Update,
+        context: CustomContext,
+    ) -> None:
+        update_mock.message.text = "PT2H"
+
         with pytest.raises(InternalError):
             await start_flow.custom_to(update_mock, context)
 
+    async def test_custom_to_not_after_start_time(
+        self,
+        start_flow: StartFlow,
+        update_mock: Update,
+        context: CustomContext,
+        now: datetime,
+    ) -> None:
         context.ensured_chat_data.start_from = now
         update_mock.message.text = "PT0S"
+
         with pytest.raises(InvalidUserInputError):
             await start_flow.custom_to(update_mock, context)
 
@@ -295,7 +412,7 @@ class TestStartFlow:
         context.ensured_chat_data.projects_map = {project.id: project}
         context.ensured_chat_data.start_project_id = project.id
         context.ensured_chat_data.start_mode = Mode.FIND_AND_BOOK
-        context.ensured_chat_data.start_required_reviews = 2
+        context.ensured_chat_data.selected_required_reviews = 2
         context.ensured_chat_data.start_from = now
         context.ensured_chat_data.start_to = now + timedelta(hours=2)
         bot_manager.list_all = MagicMock(return_value=[])
@@ -317,7 +434,7 @@ class TestStartFlow:
         data = context.ensured_chat_data
         data.projects_map = {project.id: project}
         data.start_project_id = project.id
-        data.start_required_reviews = 2
+        data.selected_required_reviews = 2
         data.start_from = now
         data.start_to = now + timedelta(hours=2)
         data.start_mode = Mode.FIND_AND_BOOK

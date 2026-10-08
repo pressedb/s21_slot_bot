@@ -50,7 +50,6 @@ class CustomInputFlow(Flow, ABC):
         logger = get_user_input_logger(user_input)
         logger.info("Picking mode in category `%s`...", self._category)
         action = InputFlowAction.PICK_MODE
-        prev_action = self._get_prev_action(action, context)
         self._set_screen(action, context)
         buttons = [
             [
@@ -66,16 +65,7 @@ class CustomInputFlow(Flow, ABC):
                 )
             ],
         ]
-        if prev_action:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        "⏪ Назад",
-                        callback_data=f"{self._category}:{InputFlowAction.BACK}:{prev_action}",
-                    )
-                ]
-            )
-        kb = InlineKeyboardMarkup(buttons)
+        kb = self._create_keyboard(buttons, action, context)
         text = self._get_chosen_project_info_text(context, action, is_markdown=True) + "выбери режим:"
         await self._messenger.render_menu_message(context, text, logger, kb=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -87,28 +77,41 @@ class CustomInputFlow(Flow, ABC):
         logger = get_user_input_logger(user_input)
         logger.info("Picking number of reviews in category `%s`...", self._category)
         action = InputFlowAction.PICK_NUM_REVIEWS
-        prev_action = self._get_prev_action(action, context)
         project = self._get_project(context)
         self._set_screen(action, context)
+        minimum_review_num = project.review_info.booked or MIN_REQUIRED_REVIEWS
         buttons = [
             [
                 InlineKeyboardButton(str(num), callback_data=f"{self._category}:{action}:{num}")
-                for num in range(MIN_REQUIRED_REVIEWS, project.review_info.required + 1)
+                for num in range(minimum_review_num, project.review_info.required + 1)
             ],
         ]
-        if prev_action:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        "⏪ Назад",
-                        callback_data=f"{self._category}:{InputFlowAction.BACK}:{prev_action}",
-                    )
-                ],
-            )
-        kb = InlineKeyboardMarkup(buttons)
+        kb = self._create_keyboard(buttons, action, context)
+        currently_booked_phrase = (
+            f" (с учетом текущих {project.review_info.booked})" if project.review_info.booked else ""
+        )
+        num_reviews_line = f"выбери общее количество проверок{currently_booked_phrase}: "
+        text = self._get_chosen_project_info_text(context, action, is_markdown=True) + num_reviews_line
+        await self._messenger.render_menu_message(context, text, logger, kb=kb, parse_mode=ParseMode.MARKDOWN_V2)
+
+    async def confirm_num_reviews(
+        self,
+        user_input: Update | CallbackQuery,
+        context: CustomContext,
+    ) -> None:
+        logger = get_user_input_logger(user_input)
+        logger.info("Confirming number of reviews in category `%s`...", self._category)
+        action = InputFlowAction.CONFIRM_NUM_REVIEWS
+        project = self._get_project(context)
+        self._set_screen(action, context)
+        buttons = [
+            [InlineKeyboardButton("Да", callback_data=f"{self._category}:{action}")],
+        ]
+        kb = self._create_keyboard(buttons, action, context)
         text = (
-            self._get_chosen_project_info_text(context, action, is_markdown=True)
-            + f"выбери количество проверок (текущих {project.review_info.booked}): "
+            f"⚠️ выбранное количество проверок совпадает с текущим количеством уже назначенных проверок ({project.review_info.booked})!\n"
+            f"В таком случае бот не будет записываться на новые проверки, пока одна из существующих записей не будет отменена.\n"
+            f"Продолжить?"
         )
         await self._messenger.render_menu_message(context, text, logger, kb=kb, parse_mode=ParseMode.MARKDOWN_V2)
 
@@ -120,7 +123,6 @@ class CustomInputFlow(Flow, ABC):
         logger = get_user_input_logger(user_input)
         logger.info("Picking search start time in category `%s`...", self._category)
         action = InputFlowAction.PICK_FROM
-        prev_action = self._get_prev_action(action, context)
         self._set_screen(action, context)
         buttons = [
             [
@@ -129,16 +131,7 @@ class CustomInputFlow(Flow, ABC):
                 InlineKeyboardButton("+1ч", callback_data=f"{self._category}:{action}:PT1H"),
             ],
         ]
-        if prev_action:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        "⏪ Назад",
-                        callback_data=f"{self._category}:{InputFlowAction.BACK}:{prev_action}",
-                    )
-                ],
-            )
-        kb = InlineKeyboardMarkup(buttons)
+        kb = self._create_keyboard(buttons, action, context)
         link = markdown.format_inline_link("поддерживаемые строковые форматы", PYDANTIC_DATETIME_DOCS_URL)
         text = (
             self._get_chosen_project_info_text(context, action, is_markdown=True) + "выбери начальное время поиска\n"
@@ -154,7 +147,6 @@ class CustomInputFlow(Flow, ABC):
         logger = get_user_input_logger(user_input)
         logger.info("Picking search end time in category `%s`...", self._category)
         action = InputFlowAction.PICK_TO
-        prev_action = self._get_prev_action(action, context)
         self._set_screen(action, context)
         buttons = [
             [
@@ -162,16 +154,7 @@ class CustomInputFlow(Flow, ABC):
                 for hour in [1, 2, 4, 8, 12]
             ],
         ]
-        if prev_action:
-            buttons.append(
-                [
-                    InlineKeyboardButton(
-                        "⏪ Назад",
-                        callback_data=f"{self._category}:{InputFlowAction.BACK}:{prev_action}",
-                    )
-                ],
-            )
-        kb = InlineKeyboardMarkup(buttons)
+        kb = self._create_keyboard(buttons, action, context)
         text = (
             self._get_chosen_project_info_text(context, action, is_markdown=True)
             + "выбери конечное время поиска относительно начала\n"
@@ -183,6 +166,25 @@ class CustomInputFlow(Flow, ABC):
     def _set_screen(self, action: FlowAction, context: CustomContext) -> None:
         screen = self._action_to_screen.get(action) or Screen.MENU
         context.ensured_chat_data.screen = screen
+
+    def _create_keyboard(
+        self,
+        buttons: list[list[InlineKeyboardButton]],
+        action: FlowAction,
+        context: CustomContext,
+    ) -> InlineKeyboardMarkup:
+        prev_action = self._get_prev_action(action, context)
+        if prev_action:
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        "⏪ Назад",
+                        callback_data=f"{self._category}:{InputFlowAction.BACK}:{prev_action}",
+                    )
+                ],
+            )
+        kb = InlineKeyboardMarkup(buttons)
+        return kb
 
     @abstractmethod
     def _get_project(self, context: CustomContext) -> ProjectExtended:
