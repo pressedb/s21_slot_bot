@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 import telegram
 from telegram import CallbackQuery, Update
@@ -181,6 +182,32 @@ class TestInputHandler:
             messenger.render_menu_error.assert_awaited_once()
         else:
             messenger.send.assert_awaited_once()
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            (httpx.ConnectError("bad")),
+            (telegram.error.NetworkError("bad")),
+        ],
+    )
+    async def test_network_errors_should_not_send_message_and_stop_bot(
+        self,
+        input_handler: InputHandler,
+        messenger: Messenger,
+        bot_manager: BotManager,
+        update_mock: Update,
+        context: CustomContext,
+        error: Exception,
+    ) -> None:
+        messenger.render_menu_error = AsyncMock()
+        messenger.send = AsyncMock()
+        bot_manager.stop_bot = MagicMock()
+        context.error = error
+
+        await input_handler.on_error(update_mock, context)
+
+        messenger.send.assert_not_awaited()
+        bot_manager.stop_bot.assert_not_called()
 
     async def test_not_modified_error_is_ignored(
         self,
